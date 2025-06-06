@@ -24,3 +24,4 @@ lto = true
 
 [features]
 persistent_storage = ["dep:rocksdb", "dep:serde", "dep:bincode", "dep:zerocopy"]
+hybrid_storage = ["persistent_storage"]
