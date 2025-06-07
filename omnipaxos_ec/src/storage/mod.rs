@@ -1,3 +1,4 @@
+pub(crate) mod erasure;
 pub(crate) mod internal_storage;
 mod state_cache;
 
