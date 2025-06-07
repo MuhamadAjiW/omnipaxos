@@ -3,11 +3,14 @@ use reed_solomon_erasure::{galois_8::ReedSolomon, Error as RSError};
 /// A fragment of a log entry for erasure-coded consensus.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EntryFragment {
-    pub idx: usize, // fragment index
+    /// The index of the fragment in the original log entry.
+    pub idx: usize,
+    /// The data of the fragment, which is a slice of the original log entry.
     pub data: Vec<u8>,
 }
 
 impl EntryFragment {
+    /// Creates a new `EntryFragment` with the given index and data.
     pub fn new(idx: usize, data: Vec<u8>) -> Self {
         Self { idx, data }
     }
@@ -15,14 +18,19 @@ impl EntryFragment {
 
 /// Utility for encoding and decoding log entries using Reed-Solomon erasure coding.
 pub struct ECService {
+    /// The number of data shards.
     pub data_shards: usize,
+    /// The number of parity shards.
     pub parity_shards: usize,
+    /// The Reed-Solomon erasure coding instance.
     pub rs: ReedSolomon,
 }
 
 impl ECService {
+    /// The number of bytes used for the length prefix metadata of the original log entry.
     pub const LENGTH_PREFIX_BYTES: usize = std::mem::size_of::<usize>(); // Limited to system usize, should be good enough for most cases
 
+    /// Creates a new `ECService` with the specified number of data and parity shards.
     pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self, RSError> {
         let rs = ReedSolomon::new(data_shards, parity_shards)?;
         Ok(Self {

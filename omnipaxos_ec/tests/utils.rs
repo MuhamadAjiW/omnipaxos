@@ -1,6 +1,6 @@
 use self::omnireplica::OmniPaxosComponent;
 use kompact::{config_keys::system, executors::crossbeam_workstealing_pool, prelude::*};
-use omnipaxos::{
+use omnipaxos_ec::{
     ballot_leader_election::Ballot,
     macros::*,
     messages::Message,
@@ -29,7 +29,7 @@ const CHECK_DECIDED_TIMEOUT: Duration = Duration::from_millis(1);
 pub const STOPSIGN_ID: u64 = u64::MAX;
 
 #[cfg(feature = "unicache")]
-use omnipaxos::unicache::{MaybeEncoded, UniCache};
+use omnipaxos_ec::unicache::{MaybeEncoded, UniCache};
 
 /// Serde deserialize function to deserialize toml milliseconds u64s to std::time::Duration
 fn deserialize_duration_millis<'de, D>(deserializer: D) -> Result<Duration, D::Error>
@@ -245,7 +245,7 @@ where
 {
     fn write_atomically(
         &mut self,
-        ops: Vec<omnipaxos::storage::StorageOp<T>>,
+        ops: Vec<omnipaxos_ec::storage::StorageOp<T>>,
     ) -> StorageResult<()> {
         match self {
             StorageType::Persistent(persist_s) => persist_s.write_atomically(ops),
@@ -390,7 +390,7 @@ where
         }
     }
 
-    fn set_stopsign(&mut self, s: Option<omnipaxos::storage::StopSign>) -> StorageResult<()> {
+    fn set_stopsign(&mut self, s: Option<omnipaxos_ec::storage::StopSign>) -> StorageResult<()> {
         match self {
             StorageType::Persistent(persist_s) => persist_s.set_stopsign(s),
             StorageType::Memory(mem_s) => mem_s.set_stopsign(s),
@@ -401,7 +401,7 @@ where
         }
     }
 
-    fn get_stopsign(&self) -> StorageResult<Option<omnipaxos::storage::StopSign>> {
+    fn get_stopsign(&self) -> StorageResult<Option<omnipaxos_ec::storage::StopSign>> {
         match self {
             StorageType::Persistent(persist_s) => persist_s.get_stopsign(),
             StorageType::Memory(mem_s) => mem_s.get_stopsign(),
@@ -740,7 +740,7 @@ impl TestSystem {
 }
 pub mod omnireplica {
     use super::*;
-    use omnipaxos::{
+    use omnipaxos_ec::{
         ballot_leader_election::Ballot,
         messages::Message,
         util::{LogEntry, NodeId},
@@ -998,7 +998,7 @@ pub fn create_temp_dir() -> String {
 
 pub mod verification {
     use super::{Value, ValueSnapshot};
-    use omnipaxos::{
+    use omnipaxos_ec::{
         storage::{Snapshot, StopSign},
         util::{LogEntry, NodeId},
     };
