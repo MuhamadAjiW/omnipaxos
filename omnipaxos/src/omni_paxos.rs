@@ -178,7 +178,6 @@ pub struct ServerConfig {
     #[cfg(feature = "logging")]
     #[cfg_attr(feature = "toml_config", serde(skip_deserializing))]
     pub custom_logger: Option<slog::Logger>,
-
     /// Erasure coding service configuration
     pub erasure_coding_service: Option<ECService>,
 }
@@ -331,7 +330,6 @@ where
     pub fn handle_incoming(&mut self, m: Message<T>) {
         match m {
             Message::SequencePaxos(p) => self.seq_paxos.handle(p),
-            Message::SequencePaxosEC(p) => self.seq_paxos.handle_ec(p),
             Message::BLE(b) => self.ble.handle(b),
         }
     }

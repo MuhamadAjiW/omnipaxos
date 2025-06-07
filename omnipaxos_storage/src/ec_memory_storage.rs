@@ -1,6 +1,6 @@
 use omnipaxos::{
     ballot_leader_election::Ballot,
-    erasure::log_entry::LogEntry,
+    erasure::log_entry::DefaultLogEntry,
     storage::{Entry, StopSign, Storage, StorageOp, StorageResult},
 };
 
@@ -10,7 +10,7 @@ use crate::memory_storage::MemoryStorage;
 #[derive(Clone)]
 pub struct ErasureMemoryStorage {
     /// The inner memory storage that holds the log entries.
-    pub inner: MemoryStorage<LogEntry>,
+    pub inner: MemoryStorage<DefaultLogEntry>,
 }
 
 impl ErasureMemoryStorage {
@@ -22,17 +22,21 @@ impl ErasureMemoryStorage {
     }
 }
 
-impl Storage<LogEntry> for ErasureMemoryStorage {
-    fn write_atomically(&mut self, ops: Vec<StorageOp<LogEntry>>) -> StorageResult<()> {
+impl Storage<DefaultLogEntry> for ErasureMemoryStorage {
+    fn write_atomically(&mut self, ops: Vec<StorageOp<DefaultLogEntry>>) -> StorageResult<()> {
         self.inner.write_atomically(ops)
     }
-    fn append_entry(&mut self, entry: LogEntry) -> StorageResult<()> {
+    fn append_entry(&mut self, entry: DefaultLogEntry) -> StorageResult<()> {
         self.inner.append_entry(entry)
     }
-    fn append_entries(&mut self, entries: Vec<LogEntry>) -> StorageResult<()> {
+    fn append_entries(&mut self, entries: Vec<DefaultLogEntry>) -> StorageResult<()> {
         self.inner.append_entries(entries)
     }
-    fn append_on_prefix(&mut self, from_idx: usize, entries: Vec<LogEntry>) -> StorageResult<()> {
+    fn append_on_prefix(
+        &mut self,
+        from_idx: usize,
+        entries: Vec<DefaultLogEntry>,
+    ) -> StorageResult<()> {
         self.inner.append_on_prefix(from_idx, entries)
     }
     fn set_promise(&mut self, n_prom: Ballot) -> StorageResult<()> {
@@ -50,13 +54,13 @@ impl Storage<LogEntry> for ErasureMemoryStorage {
     fn get_accepted_round(&self) -> StorageResult<Option<Ballot>> {
         self.inner.get_accepted_round()
     }
-    fn get_entries(&self, from: usize, to: usize) -> StorageResult<Vec<LogEntry>> {
+    fn get_entries(&self, from: usize, to: usize) -> StorageResult<Vec<DefaultLogEntry>> {
         self.inner.get_entries(from, to)
     }
     fn get_log_len(&self) -> StorageResult<usize> {
         self.inner.get_log_len()
     }
-    fn get_suffix(&self, from: usize) -> StorageResult<Vec<LogEntry>> {
+    fn get_suffix(&self, from: usize) -> StorageResult<Vec<DefaultLogEntry>> {
         self.inner.get_suffix(from)
     }
     fn get_promise(&self) -> StorageResult<Option<Ballot>> {
@@ -79,11 +83,11 @@ impl Storage<LogEntry> for ErasureMemoryStorage {
     }
     fn set_snapshot(
         &mut self,
-        _snapshot: Option<<LogEntry as Entry>::Snapshot>,
+        _snapshot: Option<<DefaultLogEntry as Entry>::Snapshot>,
     ) -> StorageResult<()> {
         Ok(())
     }
-    fn get_snapshot(&self) -> StorageResult<Option<<LogEntry as Entry>::Snapshot>> {
+    fn get_snapshot(&self) -> StorageResult<Option<<DefaultLogEntry as Entry>::Snapshot>> {
         Ok(None)
     }
 }

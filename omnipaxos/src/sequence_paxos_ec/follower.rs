@@ -4,9 +4,9 @@ use super::*;
 
 use crate::util::{MessageStatus, WRITE_ERROR_MSG};
 
-impl<T, B> SequencePaxos<T, B>
+impl<T, B> SequencePaxosEC<T, B>
 where
-    T: Entry,
+    T: LogEntry,
     B: Storage<T>,
 {
     /*** Follower ***/

@@ -7,9 +7,9 @@ use crate::util::{AcceptedMetaData, WRITE_ERROR_MSG};
 
 use super::*;
 
-impl<T, B> SequencePaxos<T, B>
+impl<T, B> SequencePaxosEC<T, B>
 where
-    T: Entry,
+    T: LogEntry,
     B: Storage<T>,
 {
     /// Handle a new leader. Should be called when the leader election has elected a new leader with the ballot `n`

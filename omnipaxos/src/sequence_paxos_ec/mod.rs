@@ -6,7 +6,7 @@ use crate::{
     messages::Message,
     storage::{
         internal_storage::{InternalStorage, InternalStorageConfig},
-        Entry, Snapshot, StopSign, Storage,
+        Snapshot, StopSign, Storage,
     },
     util::{
         FlexibleQuorum, LogSync, NodeId, Quorum, SequenceNumber, READ_ERROR_MSG, WRITE_ERROR_MSG,
@@ -23,9 +23,9 @@ pub mod leader;
 /// a Sequence Paxos replica. Maintains local state of the replicated log, handles incoming messages and produces outgoing messages that the user has to fetch periodically and send using a network implementation.
 /// User also has to periodically fetch the decided entries that are guaranteed to be strongly consistent and linearizable, and therefore also safe to be used in the higher level application.
 /// If snapshots are not desired to be used, use `()` for the type parameter `S`.
-pub(crate) struct SequencePaxos<T, B>
+pub(crate) struct SequencePaxosEC<T, B>
 where
-    T: Entry,
+    T: LogEntry,
     B: Storage<T>,
 {
     pub(crate) internal_storage: InternalStorage<B, T>,
@@ -42,16 +42,19 @@ where
     cached_promise_message: Option<Promise<T>>,
     #[cfg(feature = "logging")]
     logger: Logger,
+
+    // EC attributes
+    pub(crate) ec_service: Option<crate::erasure::ec_service::ECService>,
 }
 
-impl<T, B> SequencePaxos<T, B>
+impl<T, B> SequencePaxosEC<T, B>
 where
-    T: Entry,
+    T: LogEntry,
     B: Storage<T>,
 {
     /*** User functions ***/
     /// Creates a Sequence Paxos replica.
-    pub(crate) fn with(config: SequencePaxosConfig, storage: B) -> Self {
+    pub(crate) fn with(config: SequencePaxosConfigEC, storage: B) -> Self {
         let pid = config.pid;
         let peers = config.peers;
         let num_nodes = &peers.len() + 1;
@@ -81,7 +84,7 @@ where
         let internal_storage_config = InternalStorageConfig {
             batch_size: config.batch_size,
         };
-        let mut paxos = SequencePaxos {
+        let mut paxos = SequencePaxosEC {
             internal_storage: InternalStorage::with(
                 storage,
                 internal_storage_config,
@@ -109,6 +112,7 @@ where
                     create_logger(s.as_str())
                 }
             },
+            ec_service: config.erasure_coding_service,
         };
         paxos
             .internal_storage
@@ -457,7 +461,7 @@ pub(crate) enum Role {
 /// * `logger_file_path`: The path where the default logger logs events.
 /// * `erasure_coding_service`: Erasure coding configuration.
 #[derive(Clone, Debug)]
-pub(crate) struct SequencePaxosConfig {
+pub(crate) struct SequencePaxosConfigEC {
     pid: NodeId,
     peers: Vec<NodeId>,
     buffer_size: usize,
@@ -470,7 +474,7 @@ pub(crate) struct SequencePaxosConfig {
     erasure_coding_service: Option<ECService>,
 }
 
-impl From<OmniPaxosConfig> for SequencePaxosConfig {
+impl From<OmniPaxosConfig> for SequencePaxosConfigEC {
     fn from(config: OmniPaxosConfig) -> Self {
         let pid = config.server_config.pid;
         let peers = config
@@ -479,7 +483,7 @@ impl From<OmniPaxosConfig> for SequencePaxosConfig {
             .into_iter()
             .filter(|x| *x != pid)
             .collect();
-        SequencePaxosConfig {
+        SequencePaxosConfigEC {
             pid,
             peers,
             flexible_quorum: config.cluster_config.flexible_quorum,

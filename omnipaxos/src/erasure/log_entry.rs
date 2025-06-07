@@ -27,10 +27,21 @@ impl fmt::Display for OperationType {
         write!(f, "{}", str)
     }
 }
-/// A log entry for erasure coded consensus: key is not sharded, value is a fragment.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct LogEntry {
+
+/// Trait for a log entry for erasure coded consensus.
+pub trait LogEntry: Entry {
     /// The operation type, e.g., SET or DELETE.
+    fn operation(&self) -> &OperationType;
+    /// The key of the log entry, which is a unique identifier for the value.
+    fn key(&self) -> &str;
+    /// The value of the log entry, which is a fragment of the original log entry.
+    fn value(&self) -> &EntryFragment;
+}
+
+/// A default log entry struct implementing the LogEntry trait
+#[derive(Clone, Debug, PartialEq)]
+pub struct DefaultLogEntry {
+    /// The type of operation performed on the log entry, e.g., SET or DELETE.
     pub operation: OperationType,
     /// The key of the log entry, which is a unique identifier for the value.
     pub key: String,
@@ -38,16 +49,18 @@ pub struct LogEntry {
     pub value: EntryFragment,
 }
 
-impl Entry for LogEntry {
+impl Entry for DefaultLogEntry {
     type Snapshot = NoSnapshot;
-    #[cfg(feature = "unicache")]
-    type Encoded = ();
-    #[cfg(feature = "unicache")]
-    type Encodable = ();
-    #[cfg(feature = "unicache")]
-    type NotEncodable = ();
-    #[cfg(all(feature = "unicache"))]
-    type EncodeResult = ();
-    #[cfg(all(feature = "unicache"))]
-    type UniCache = ();
+}
+
+impl LogEntry for DefaultLogEntry {
+    fn operation(&self) -> &OperationType {
+        &self.operation
+    }
+    fn key(&self) -> &str {
+        &self.key
+    }
+    fn value(&self) -> &EntryFragment {
+        &self.value
+    }
 }

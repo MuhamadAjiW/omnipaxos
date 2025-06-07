@@ -26,6 +26,8 @@ pub use omni_paxos::*;
 
 /// The core replication algorithm of OmniPaxos.
 pub(crate) mod sequence_paxos;
+/// The core replication algorithm of OmniPaxos.
+pub(crate) mod sequence_paxos_ec;
 /// Traits and structs related to the backend storage of an OmniPaxos server.
 pub mod storage;
 
