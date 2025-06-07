@@ -1,5 +1,6 @@
 use crate::{
     ballot_leader_election::{Ballot, BallotLeaderElection},
+    erasure::ec_service::ECService,
     errors::{valid_config, ConfigError},
     messages::Message,
     sequence_paxos::{Phase, SequencePaxos},
@@ -8,7 +9,7 @@ use crate::{
         defaults::{BUFFER_SIZE, ELECTION_TIMEOUT, FLUSH_BATCH_TIMEOUT, RESEND_MESSAGE_TIMEOUT},
         ConfigurationId, FlexibleQuorum, LogEntry, LogicalClock, NodeId,
     },
-    utils::{ui, ui::ClusterState},
+    utils::ui::{self, ClusterState},
 };
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "toml_config")]
@@ -177,6 +178,9 @@ pub struct ServerConfig {
     #[cfg(feature = "logging")]
     #[cfg_attr(feature = "toml_config", serde(skip_deserializing))]
     pub custom_logger: Option<slog::Logger>,
+
+    /// Erasure coding service configuration
+    pub erasure_coding_service: Option<ECService>,
 }
 
 impl ServerConfig {
@@ -211,6 +215,7 @@ impl Default for ServerConfig {
             logger_file_path: None,
             #[cfg(feature = "logging")]
             custom_logger: None,
+            erasure_coding_service: None,
         }
     }
 }
@@ -326,6 +331,7 @@ where
     pub fn handle_incoming(&mut self, m: Message<T>) {
         match m {
             Message::SequencePaxos(p) => self.seq_paxos.handle(p),
+            Message::SequencePaxosEC(p) => self.seq_paxos.handle_ec(p),
             Message::BLE(b) => self.ble.handle(b),
         }
     }

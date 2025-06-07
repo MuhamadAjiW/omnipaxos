@@ -18,6 +18,7 @@ impl EntryFragment {
 }
 
 /// Utility for encoding and decoding log entries using Reed-Solomon erasure coding.
+#[derive(Clone, Debug)]
 pub struct ECService {
     /// The number of data shards.
     pub data_shards: usize,

@@ -1,5 +1,8 @@
 use crate::{
-    messages::{ballot_leader_election::BLEMessage, sequence_paxos::PaxosMessage},
+    messages::{
+        ballot_leader_election::BLEMessage,
+        sequence_paxos::{PaxosMessage, PaxosMessageEC},
+    },
     storage::Entry,
     util::NodeId,
 };
@@ -334,6 +337,7 @@ where
     T: Entry,
 {
     SequencePaxos(PaxosMessage<T>),
+    SequencePaxosEC(PaxosMessageEC),
     BLE(BLEMessage),
 }
 
@@ -345,6 +349,7 @@ where
     pub fn get_sender(&self) -> NodeId {
         match self {
             Message::SequencePaxos(p) => p.from,
+            Message::SequencePaxosEC(p) => p.from,
             Message::BLE(b) => b.from,
         }
     }
@@ -353,6 +358,7 @@ where
     pub fn get_receiver(&self) -> NodeId {
         match self {
             Message::SequencePaxos(p) => p.to,
+            Message::SequencePaxosEC(p) => p.to,
             Message::BLE(b) => b.to,
         }
     }

@@ -2,6 +2,7 @@ use super::super::{
     ballot_leader_election::Ballot,
     util::{LeaderState, PromiseMetaData},
 };
+use crate::erasure::log_entry::LogEntry;
 use crate::util::{AcceptedMetaData, WRITE_ERROR_MSG};
 
 use super::*;
@@ -412,5 +413,45 @@ where
                 .set_accepted_idx(self.pid, metadata.accepted_idx);
             self.send_acceptdecide(metadata);
         }
+    }
+
+    // EC Functions
+    pub(crate) fn handle_promise_prepare_ec(&mut self, prom: PromiseEC, from: NodeId) {
+        // #[cfg(feature = "logging")]
+        // debug!(
+        //     self.logger,
+        //     "Handling promise from {} in Prepare phase", from
+        // );
+        // if prom.n == self.leader_state.n_leader {
+        //     let received_majority = self.leader_state.set_promise(prom, from, true);
+        //     if received_majority {
+        //         self.handle_majority_promises();
+        //     }
+        // }
+    }
+
+    pub(crate) fn handle_promise_accept_ec(&mut self, prom: PromiseEC, from: NodeId) {
+        // #[cfg(feature = "logging")]
+        // {
+        //     let (r, p) = &self.state;
+        //     debug!(
+        //         self.logger,
+        //         "Self role {:?}, phase {:?}. Incoming message Promise Accept from {}", r, p, from
+        //     );
+        // }
+        // if prom.n == self.leader_state.n_leader {
+        //     self.leader_state.set_promise(prom, from, false);
+        //     self.send_accsync(from);
+        // }
+    }
+
+    pub(crate) fn handle_forwarded_proposal_ec(&mut self, mut entries: Vec<LogEntry>) {
+        // if !self.accepted_reconfiguration() {
+        //     match self.state {
+        //         (Role::Leader, Phase::Prepare) => self.buffered_proposals.append(&mut entries),
+        //         (Role::Leader, Phase::Accept) => self.accept_entries_leader(entries),
+        //         _ => self.forward_proposals(entries),
+        //     }
+        // }
     }
 }

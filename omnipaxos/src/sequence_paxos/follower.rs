@@ -288,4 +288,57 @@ where
             self.reply_accepted(self.get_promise(), new_accepted_idx);
         }
     }
+
+    // EC Functions
+    pub(crate) fn handle_acceptsync_ec(&mut self, accsync: AcceptSyncEC, from: NodeId) {
+        // if self.check_valid_ballot(accsync.n) && self.state == (Role::Follower, Phase::Prepare) {
+        //     self.cached_promise_message = None;
+        //     let new_accepted_idx = self
+        //         .internal_storage
+        //         .sync_log(accsync.n, accsync.decided_idx, Some(accsync.log_sync))
+        //         .expect(WRITE_ERROR_MSG);
+        //     if self.internal_storage.get_stopsign().is_none() {
+        //         self.forward_buffered_proposals();
+        //     }
+        //     let accepted = Accepted {
+        //         n: accsync.n,
+        //         accepted_idx: new_accepted_idx,
+        //     };
+        //     self.state = (Role::Follower, Phase::Accept);
+        //     self.current_seq_num = accsync.seq_num;
+        //     let cached_idx = self.outgoing.len();
+        //     self.latest_accepted_meta = Some((accsync.n, cached_idx));
+        //     self.outgoing.push(Message::SequencePaxos(PaxosMessage {
+        //         from: self.pid,
+        //         to: from,
+        //         msg: PaxosMsg::Accepted(accepted),
+        //     }));
+        //     #[cfg(feature = "unicache")]
+        //     self.internal_storage.set_unicache(accsync.unicache);
+        // }
+    }
+
+    pub(crate) fn handle_acceptdecide_ec(&mut self, acc_dec: AcceptDecideEC) {
+        // if self.check_valid_ballot(acc_dec.n)
+        //     && self.state == (Role::Follower, Phase::Accept)
+        //     && self.handle_sequence_num(acc_dec.seq_num, acc_dec.n.pid) == MessageStatus::Expected
+        // {
+        //     #[cfg(not(feature = "unicache"))]
+        //     let entries = acc_dec.entries;
+        //     #[cfg(feature = "unicache")]
+        //     let entries = self.internal_storage.decode_entries(acc_dec.entries);
+        //     let mut new_accepted_idx = self
+        //         .internal_storage
+        //         .append_entries_and_get_accepted_idx(entries)
+        //         .expect(WRITE_ERROR_MSG);
+        //     let flushed_after_decide =
+        //         self.update_decided_idx_and_get_accepted_idx(acc_dec.decided_idx);
+        //     if flushed_after_decide.is_some() {
+        //         new_accepted_idx = flushed_after_decide;
+        //     }
+        //     if let Some(idx) = new_accepted_idx {
+        //         self.reply_accepted(acc_dec.n, idx);
+        //     }
+        // }
+    }
 }

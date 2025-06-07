@@ -2,6 +2,7 @@ use super::{ballot_leader_election::Ballot, messages::sequence_paxos::*, util::L
 #[cfg(feature = "logging")]
 use crate::utils::logger::create_logger;
 use crate::{
+    erasure::ec_service::ECService,
     messages::Message,
     storage::{
         internal_storage::{InternalStorage, InternalStorageConfig},
@@ -27,6 +28,8 @@ where
     T: Entry,
     B: Storage<T>,
 {
+    /// Optional erasure coding service for EC-enabled operation
+    pub(crate) ec_service: Option<crate::erasure::ec_service::ECService>,
     pub(crate) internal_storage: InternalStorage<B, T>,
     pid: NodeId,
     peers: Vec<NodeId>, // excluding self pid
@@ -108,6 +111,7 @@ where
                     create_logger(s.as_str())
                 }
             },
+            ec_service: config.erasure_coding_service,
         };
         paxos
             .internal_storage
@@ -278,6 +282,30 @@ where
             PaxosMsg::Compaction(c) => self.handle_compaction(c),
             PaxosMsg::AcceptStopSign(acc_ss) => self.handle_accept_stopsign(acc_ss),
             PaxosMsg::ForwardStopSign(f_ss) => self.handle_forwarded_stopsign(f_ss),
+        }
+    }
+
+    /// Handle an incoming EC Message.
+    pub(crate) fn handle_ec(&mut self, m: PaxosMessageEC) {
+        match m.msg {
+            PaxosMsgEC::PrepareReq(prepreq) => self.handle_preparereq(prepreq, m.from),
+            PaxosMsgEC::Prepare(prep) => self.handle_prepare(prep, m.from),
+            PaxosMsgEC::PromiseEC(prom) => match &self.state {
+                (Role::Leader, Phase::Prepare) => self.handle_promise_prepare_ec(prom, m.from),
+                (Role::Leader, Phase::Accept) => self.handle_promise_accept_ec(prom, m.from),
+                _ => {}
+            },
+            PaxosMsgEC::AcceptSyncEC(acc_sync) => self.handle_acceptsync_ec(acc_sync, m.from),
+            PaxosMsgEC::AcceptDecideEC(acc) => self.handle_acceptdecide_ec(acc),
+            PaxosMsgEC::NotAccepted(not_acc) => self.handle_notaccepted(not_acc, m.from),
+            PaxosMsgEC::Accepted(accepted) => self.handle_accepted(accepted, m.from),
+            PaxosMsgEC::Decide(d) => self.handle_decide(d),
+            PaxosMsgEC::ProposalForwardEC(proposals) => {
+                self.handle_forwarded_proposal_ec(proposals)
+            }
+            PaxosMsgEC::Compaction(c) => self.handle_compaction(c),
+            PaxosMsgEC::AcceptStopSign(acc_ss) => self.handle_accept_stopsign(acc_ss),
+            PaxosMsgEC::ForwardStopSign(f_ss) => self.handle_forwarded_stopsign(f_ss),
         }
     }
 
@@ -454,6 +482,7 @@ pub(crate) enum Role {
 /// * `buffer_size`: The buffer size for outgoing messages.
 /// * `batch_size`: The size of the buffer for log batching. The default is 1, which means no batching.
 /// * `logger_file_path`: The path where the default logger logs events.
+/// * `erasure_coding_service`: Erasure coding configuration.
 #[derive(Clone, Debug)]
 pub(crate) struct SequencePaxosConfig {
     pid: NodeId,
@@ -465,6 +494,7 @@ pub(crate) struct SequencePaxosConfig {
     logger_file_path: Option<String>,
     #[cfg(feature = "logging")]
     custom_logger: Option<Logger>,
+    erasure_coding_service: Option<ECService>,
 }
 
 impl From<OmniPaxosConfig> for SequencePaxosConfig {
@@ -486,6 +516,7 @@ impl From<OmniPaxosConfig> for SequencePaxosConfig {
             logger_file_path: config.server_config.logger_file_path,
             #[cfg(feature = "logging")]
             custom_logger: config.server_config.custom_logger,
+            erasure_coding_service: config.server_config.erasure_coding_service,
         }
     }
 }
