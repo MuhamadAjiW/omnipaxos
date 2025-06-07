@@ -12,3 +12,4 @@ pub mod ec_snapshot_test;
 pub mod ec_sync_test;
 pub mod ec_trim_test;
 pub mod erasure_coding_test;
+pub mod utils;

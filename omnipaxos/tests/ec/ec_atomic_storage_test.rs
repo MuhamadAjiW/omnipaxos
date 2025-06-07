@@ -10,8 +10,9 @@
 ///     3. Schedule a failure in the mock-broken storage.
 ///     4. Give it the test message and catch the ensuing panic.
 ///     5. Check if the storage is in a consistent state.
+use crate::ec::utils::{TestECEntry, TestECEntrySnapshot};
 use crate::utils::StorageType;
-use crate::utils::{BrokenStorageConfig, TestConfig, Value, ValueSnapshot};
+use crate::utils::{BrokenStorageConfig, TestConfig};
 #[cfg(not(feature = "unicache"))]
 use omnipaxos::messages::sequence_paxos::{AcceptDecide, Compaction};
 #[cfg(feature = "unicache")]
@@ -26,7 +27,7 @@ use omnipaxos::{
     },
     storage::{Snapshot, SnapshotType, Storage},
     util::{LogSync, NodeId, SequenceNumber},
-    OmniPaxos, OmniPaxosConfig,
+    OmniPaxosEC, OmniPaxosECConfig,
 };
 use omnipaxos_storage::memory_storage::MemoryStorage;
 use serial_test::serial;
@@ -35,7 +36,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-type MemoryStore = Arc<Mutex<MemoryStorage<Value>>>;
+type MemoryStore = Arc<Mutex<MemoryStorage<TestECEntry>>>;
 type BrokenStore = Arc<Mutex<BrokenStorageConfig>>;
 
 /// Creates a new OmniPaxos instance with `BrokenStorage` in its initial state.
@@ -44,7 +45,7 @@ type BrokenStore = Arc<Mutex<BrokenStorageConfig>>;
 fn basic_setup() -> (
     MemoryStore,
     BrokenStore,
-    OmniPaxos<Value, StorageType<Value>>,
+    OmniPaxosEC<TestECEntry, StorageType<TestECEntry>>,
 ) {
     let cfg = TestConfig::load("atomic_storage_test").expect("Test config loaded");
     let storage = StorageType::with(cfg.storage_type, "");
@@ -53,7 +54,7 @@ fn basic_setup() -> (
     } else {
         panic!("using wrong storage for atomic_storage_test")
     };
-    let mut op_config = OmniPaxosConfig::default();
+    let mut op_config = OmniPaxosECConfig::default();
     op_config.server_config.pid = 1;
     op_config.cluster_config.nodes = (1..=cfg.num_nodes as NodeId).collect();
     op_config.cluster_config.configuration_id = 1;
@@ -68,12 +69,12 @@ fn basic_setup() -> (
 fn _setup_leader() -> (
     MemoryStore,
     BrokenStore,
-    OmniPaxos<Value, StorageType<Value>>,
+    OmniPaxosEC<TestECEntry, StorageType<TestECEntry>>,
 ) {
     let (mem_storage, storage_conf, mut op) = setup_follower();
     let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();
     let n_old = n;
-    let setup_msg = Message::<Value>::BLE(BLEMessage {
+    let setup_msg = Message::<TestECEntry>::BLE(BLEMessage {
         from: 2,
         to: 1,
         msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -85,7 +86,7 @@ fn _setup_leader() -> (
     });
     op.handle_incoming(setup_msg);
     op.tick(); // trigger leader change
-    let setup_msg = Message::<Value>::BLE(BLEMessage {
+    let setup_msg = Message::<TestECEntry>::BLE(BLEMessage {
         from: 2,
         to: 1,
         msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -97,7 +98,7 @@ fn _setup_leader() -> (
     });
     op.handle_incoming(setup_msg);
     op.tick(); // trigger leader change
-    let setup_msg = Message::<Value>::BLE(BLEMessage {
+    let setup_msg = Message::<TestECEntry>::BLE(BLEMessage {
         from: 2,
         to: 1,
         msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -118,7 +119,7 @@ fn _setup_leader() -> (
             }
         }
     }
-    let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+    let setup_msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
         from: 2,
         to: 1,
         msg: PaxosMsg::Promise(Promise {
@@ -144,14 +145,14 @@ fn _setup_leader() -> (
 fn setup_follower() -> (
     MemoryStore,
     BrokenStore,
-    OmniPaxos<Value, StorageType<Value>>,
+    OmniPaxosEC<TestECEntry, StorageType<TestECEntry>>,
 ) {
     let (mem_storage, storage_conf, mut op) = basic_setup();
     let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();
     n.config_id = 1;
     n.n += 1;
     n.pid = 2;
-    let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+    let setup_msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
         from: 2,
         to: 1,
         msg: PaxosMsg::Prepare(Prepare {
@@ -172,7 +173,7 @@ fn setup_follower() -> (
         session: 1,
         counter: 1,
     };
-    let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+    let setup_msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
         from: 2,
         to: 1,
         msg: PaxosMsg::AcceptSync(AcceptSync {
@@ -186,7 +187,7 @@ fn setup_follower() -> (
                 stopsign: None,
             },
             #[cfg(feature = "unicache")]
-            unicache: <Value as Entry>::UniCache::new(),
+            unicache: <TestECEntry as Entry>::UniCache::new(),
         }),
     });
     op.handle_incoming(setup_msg);
@@ -206,7 +207,7 @@ fn ec_atomic_storage_acceptsync_test() {
         let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();
         n.n += 1;
         n.pid = 2;
-        let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let setup_msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::Prepare(Prepare {
@@ -229,7 +230,7 @@ fn ec_atomic_storage_acceptsync_test() {
             .unwrap()
             .schedule_failure_in(fail_after_n_ops);
 
-        let msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::AcceptSync(AcceptSync {
@@ -238,12 +239,16 @@ fn ec_atomic_storage_acceptsync_test() {
                 decided_idx: 1,
                 log_sync: LogSync {
                     decided_snapshot: None,
-                    suffix: vec![Value::with_id(1), Value::with_id(2), Value::with_id(3)],
+                    suffix: vec![
+                        TestECEntry::dummy(1),
+                        TestECEntry::dummy(2),
+                        TestECEntry::dummy(3),
+                    ],
                     sync_idx: 0,
                     stopsign: None,
                 },
                 #[cfg(feature = "unicache")]
-                unicache: <Value as Entry>::UniCache::new(),
+                unicache: <TestECEntry as Entry>::UniCache::new(),
             }),
         });
         let _res = catch_unwind(AssertUnwindSafe(|| op.handle_incoming(msg.clone())));
@@ -271,7 +276,7 @@ fn ec_atomic_storage_trim_test() {
     fn run_single_test(fail_after_n_ops: usize) {
         let (mem_storage, storage_conf, mut op) = setup_follower();
 
-        let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let setup_msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::AcceptDecide(AcceptDecide {
@@ -282,12 +287,12 @@ fn ec_atomic_storage_trim_test() {
                 },
                 decided_idx: 5,
                 entries: vec![
-                    Value::with_id(1),
-                    Value::with_id(2),
-                    Value::with_id(3),
-                    Value::with_id(4),
-                    Value::with_id(5),
-                    Value::with_id(6),
+                    TestECEntry::dummy(1),
+                    TestECEntry::dummy(2),
+                    TestECEntry::dummy(3),
+                    TestECEntry::dummy(4),
+                    TestECEntry::dummy(5),
+                    TestECEntry::dummy(6),
                 ],
             }),
         });
@@ -301,7 +306,7 @@ fn ec_atomic_storage_trim_test() {
             .schedule_failure_in(fail_after_n_ops);
 
         // Test handle Trim
-        let msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::Compaction(Compaction::Trim(4)),
@@ -335,7 +340,7 @@ fn ec_atomic_storage_snapshot_test() {
     fn run_single_test(fail_after_n_ops: usize) {
         let (mem_storage, storage_conf, mut op) = setup_follower();
 
-        let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let setup_msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::AcceptDecide(AcceptDecide {
@@ -346,12 +351,12 @@ fn ec_atomic_storage_snapshot_test() {
                 },
                 decided_idx: 5,
                 entries: vec![
-                    Value::with_id(1),
-                    Value::with_id(2),
-                    Value::with_id(3),
-                    Value::with_id(4),
-                    Value::with_id(5),
-                    Value::with_id(6),
+                    TestECEntry::dummy(1),
+                    TestECEntry::dummy(2),
+                    TestECEntry::dummy(3),
+                    TestECEntry::dummy(4),
+                    TestECEntry::dummy(5),
+                    TestECEntry::dummy(6),
                 ],
             }),
         });
@@ -365,7 +370,7 @@ fn ec_atomic_storage_snapshot_test() {
             .schedule_failure_in(fail_after_n_ops);
 
         // Test handle Snapshot
-        let msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::Compaction(Compaction::Snapshot(Some(4))),
@@ -413,7 +418,7 @@ fn ec_atomic_storage_accept_decide_test() {
             .schedule_failure_in(fail_after_n_ops);
 
         // Test handle AcceptDecide
-        let msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::AcceptDecide(AcceptDecide {
@@ -424,12 +429,12 @@ fn ec_atomic_storage_accept_decide_test() {
                 },
                 decided_idx: 5,
                 entries: vec![
-                    Value::with_id(1),
-                    Value::with_id(2),
-                    Value::with_id(3),
-                    Value::with_id(4),
-                    Value::with_id(5),
-                    Value::with_id(6),
+                    TestECEntry::dummy(1),
+                    TestECEntry::dummy(2),
+                    TestECEntry::dummy(3),
+                    TestECEntry::dummy(4),
+                    TestECEntry::dummy(5),
+                    TestECEntry::dummy(6),
                 ],
             }),
         });
@@ -460,7 +465,7 @@ fn ec_atomic_storage_majority_promises_test() {
         let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();
         // Send messages to 1 such that it tries to take over leadership
         let n_old = n;
-        let setup_msg = Message::<Value>::BLE(BLEMessage {
+        let setup_msg = Message::<TestECEntry>::BLE(BLEMessage {
             from: 2,
             to: 1,
             msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -472,7 +477,7 @@ fn ec_atomic_storage_majority_promises_test() {
         });
         op.handle_incoming(setup_msg);
         op.tick();
-        let setup_msg = Message::<Value>::BLE(BLEMessage {
+        let setup_msg = Message::<TestECEntry>::BLE(BLEMessage {
             from: 2,
             to: 1,
             msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -483,7 +488,7 @@ fn ec_atomic_storage_majority_promises_test() {
             }),
         });
         op.handle_incoming(setup_msg);
-        let setup_msg = Message::<Value>::BLE(BLEMessage {
+        let setup_msg = Message::<TestECEntry>::BLE(BLEMessage {
             from: 3,
             to: 1,
             msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -499,7 +504,7 @@ fn ec_atomic_storage_majority_promises_test() {
         let mut n_new = n_old;
         n_new.n += 1;
         n_new.pid = 1;
-        let setup_msg = Message::<Value>::BLE(BLEMessage {
+        let setup_msg = Message::<TestECEntry>::BLE(BLEMessage {
             from: 2,
             to: 1,
             msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -510,7 +515,7 @@ fn ec_atomic_storage_majority_promises_test() {
             }),
         });
         op.handle_incoming(setup_msg);
-        let setup_msg = Message::<Value>::BLE(BLEMessage {
+        let setup_msg = Message::<TestECEntry>::BLE(BLEMessage {
             from: 3,
             to: 1,
             msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -541,7 +546,7 @@ fn ec_atomic_storage_majority_promises_test() {
             .unwrap()
             .schedule_failure_in(fail_after_n_ops);
 
-        let msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let msg = Message::<TestECEntry>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::Promise(Promise {
@@ -550,11 +555,11 @@ fn ec_atomic_storage_majority_promises_test() {
                 accepted_idx: 3,
                 n_accepted: n_old,
                 log_sync: Some(LogSync {
-                    decided_snapshot: Some(SnapshotType::Complete(ValueSnapshot::create(&[
-                        Value::with_id(1),
-                        Value::with_id(2),
+                    decided_snapshot: Some(SnapshotType::Complete(TestECEntrySnapshot::create(&[
+                        TestECEntry::dummy(1),
+                        TestECEntry::dummy(2),
                     ]))),
-                    suffix: vec![Value::with_id(3)],
+                    suffix: vec![TestECEntry::dummy(3)],
                     sync_idx: 2,
                     stopsign: None,
                 }),
