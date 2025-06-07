@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use omnipaxos::erasure::{ECService, EntryFragment};
+    use omnipaxos::erasure::ec_service::{ECService, EntryFragment};
 
     fn setup_ec_service(shard_count: usize, parity_count: usize) -> ECService {
         ECService::new(shard_count, parity_count).unwrap()

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// Internal component for log replication
 pub mod sequence_paxos {
-    use crate::storage::LogEntry;
+    use crate::erasure::log_entry::LogEntry;
     use crate::{
         ballot_leader_election::Ballot,
         storage::{Entry, StopSign},
