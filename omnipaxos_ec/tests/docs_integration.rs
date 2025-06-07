@@ -10,7 +10,7 @@ mod docs_integration_test {
     #![cfg(feature = "macros")]
     #![cfg(feature = "toml_config")]
 
-    use omnipaxos::{
+    use omnipaxos_ec::{
         messages::Message, storage::Snapshot, util::LogEntry, ClusterConfig, OmniPaxos,
         OmniPaxosConfig, ServerConfig,
     };
@@ -23,7 +23,7 @@ mod docs_integration_test {
 
     // https://github.com/haraldng/omnipaxos/blob/master/docs/omnipaxos/index.md#example-key-value-store
     // CODE_EXAMPLE
-    use omnipaxos::macros::Entry;
+    use omnipaxos_ec::macros::Entry;
 
     #[cfg_attr(feature = "macros", derive(Entry))]
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -36,7 +36,7 @@ mod docs_integration_test {
     // https://github.com/haraldng/omnipaxos/blob/master/docs/omnipaxos/compaction.md#snapshot
     // CODE_EXAMPLE
     #[cfg(not(feature = "macros"))]
-    use omnipaxos::storage::Entry;
+    use omnipaxos_ec::storage::Entry;
 
     #[cfg(not(feature = "macros"))]
     #[derive(Clone, Debug)]
@@ -83,7 +83,7 @@ mod docs_integration_test {
     // https://github.com/haraldng/omnipaxos/blob/master/docs/omnipaxos/index.md#creating-a-node
     fn creating_a_node() -> OmniPaxos<KeyValue, MemoryStorage<KeyValue>> {
         // CODE_EXAMPLE
-        use omnipaxos::{ClusterConfig, OmniPaxos, OmniPaxosConfig, ServerConfig};
+        use omnipaxos_ec::{ClusterConfig, OmniPaxos, OmniPaxosConfig, ServerConfig};
         use omnipaxos_storage::memory_storage::MemoryStorage;
 
         // configuration with id 1 and a cluster with 3 nodes
@@ -165,7 +165,7 @@ mod docs_integration_test {
         let mut omni_paxos = creating_a_node();
 
         // CODE_EXAMPLE
-        use omnipaxos::messages::Message;
+        use omnipaxos_ec::messages::Message;
 
         // handle incoming message from network layer
         let msg: Message<KeyValue> = in_msg; // message to this node e.g. `msg.get_receiver() == 2`
@@ -229,7 +229,7 @@ mod docs_integration_test {
         let mut omni_paxos = creating_a_node();
 
         // CODE_EXAMPLE
-        use omnipaxos::CompactionErr;
+        use omnipaxos_ec::CompactionErr;
 
         // we will try trimming the first 100 entries of the log.
         let trim_idx = Some(100); // using `None` will use the highest trimmable index
@@ -252,7 +252,7 @@ mod docs_integration_test {
 
     // https://github.com/haraldng/omnipaxos/blob/master/docs/omnipaxos/compaction.md#snapshot
     fn snapshot() {
-        use omnipaxos::CompactionErr;
+        use omnipaxos_ec::CompactionErr;
         let mut omni_paxos = creating_a_node();
 
         // CODE_EXAMPLE
@@ -348,7 +348,7 @@ mod docs_integration_test {
     // https://github.com/haraldng/omnipaxos/blob/master/docs/omnipaxos/flexible_quorums.md
     fn flexible_quorums() {
         // CODE_EXAMPLE
-        use omnipaxos::{util::FlexibleQuorum, ClusterConfig, OmniPaxosConfig, ServerConfig};
+        use omnipaxos_ec::{util::FlexibleQuorum, ClusterConfig, OmniPaxosConfig, ServerConfig};
 
         let flex_quorum = FlexibleQuorum {
             read_quorum_size: 5,

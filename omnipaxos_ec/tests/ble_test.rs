@@ -3,8 +3,6 @@ pub mod utils;
 use serial_test::serial;
 use std::thread;
 use utils::{TestConfig, TestSystem};
-use omnipaxos_ec::ballot_leader_election::Ballot;
-use omnipaxos_ec::util::NodeId;
 
 /// Test Ballot Election Leader module.
 /// The test waits for [`num_elections`] elections.
