@@ -1,15 +1,13 @@
-pub mod utils;
-
+use crate::utils::{verification::verify_log, TestConfig, TestSystem, Value};
 use omnipaxos::util::NodeId;
 use serial_test::serial;
 use std::thread;
-use utils::{verification::verify_log, TestConfig, TestSystem, Value};
 
 /// Verifies that an OmniPaxos cluster with a write quorum size of Q can still make
 /// progress with Q-1 failures, including leader failure.
 #[test]
 #[serial]
-fn flexible_quorum_prepare_phase_test() {
+fn ec_flexible_quorum_prepare_phase_test() {
     // Start Kompact system
     let cfg = TestConfig::load("flexible_quorum_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystem::with(cfg);
@@ -52,7 +50,7 @@ fn flexible_quorum_prepare_phase_test() {
 /// progress with N - Q failures so long as nodes remain in the accept phase (leader doesn't fail).
 #[test]
 #[serial]
-fn flexible_quorum_accept_phase_test() {
+fn ec_flexible_quorum_accept_phase_test() {
     // Start Kompact system
     let cfg = TestConfig::load("flexible_quorum_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystem::with(cfg);

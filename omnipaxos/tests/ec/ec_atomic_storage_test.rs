@@ -10,9 +10,8 @@
 ///     3. Schedule a failure in the mock-broken storage.
 ///     4. Give it the test message and catch the ensuing panic.
 ///     5. Check if the storage is in a consistent state.
-pub mod utils;
-
 use crate::utils::StorageType;
+use crate::utils::{BrokenStorageConfig, TestConfig, Value, ValueSnapshot};
 #[cfg(not(feature = "unicache"))]
 use omnipaxos::messages::sequence_paxos::{AcceptDecide, Compaction};
 #[cfg(feature = "unicache")]
@@ -35,7 +34,6 @@ use std::{
     panic::{catch_unwind, AssertUnwindSafe},
     sync::{Arc, Mutex},
 };
-use utils::{BrokenStorageConfig, TestConfig, Value, ValueSnapshot};
 
 type MemoryStore = Arc<Mutex<MemoryStorage<Value>>>;
 type BrokenStore = Arc<Mutex<BrokenStorageConfig>>;
@@ -202,7 +200,7 @@ fn setup_follower() -> (
 
 #[test]
 #[serial]
-fn atomic_storage_acceptsync_test() {
+fn ec_atomic_storage_acceptsync_test() {
     fn run_single_test(fail_after_n_ops: usize) {
         let (mem_storage, storage_conf, mut op) = basic_setup();
         let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();
@@ -269,7 +267,7 @@ fn atomic_storage_acceptsync_test() {
 #[cfg(not(feature = "unicache"))]
 #[test]
 #[serial]
-fn atomic_storage_trim_test() {
+fn ec_atomic_storage_trim_test() {
     fn run_single_test(fail_after_n_ops: usize) {
         let (mem_storage, storage_conf, mut op) = setup_follower();
 
@@ -333,7 +331,7 @@ fn atomic_storage_trim_test() {
 #[cfg(not(feature = "unicache"))]
 #[test]
 #[serial]
-fn atomic_storage_snapshot_test() {
+fn ec_atomic_storage_snapshot_test() {
     fn run_single_test(fail_after_n_ops: usize) {
         let (mem_storage, storage_conf, mut op) = setup_follower();
 
@@ -403,7 +401,7 @@ fn atomic_storage_snapshot_test() {
 #[cfg(not(feature = "unicache"))]
 #[test]
 #[serial]
-fn atomic_storage_accept_decide_test() {
+fn ec_atomic_storage_accept_decide_test() {
     fn run_single_test(fail_after_n_ops: usize) {
         let (mem_storage, storage_conf, mut op) = setup_follower();
 
@@ -456,7 +454,7 @@ fn atomic_storage_accept_decide_test() {
 
 #[test]
 #[serial]
-fn atomic_storage_majority_promises_test() {
+fn ec_atomic_storage_majority_promises_test() {
     fn run_single_test(fail_after_n_ops: usize) {
         let (mem_storage, storage_conf, mut op) = setup_follower();
         let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();

@@ -1,11 +1,9 @@
-pub mod utils;
-
+use crate::utils::{create_proposals, TestConfig, TestSystem, Value};
 use crate::utils::{omnireplica::OmniPaxosComponent, ValueSnapshot};
 use kompact::prelude::{promise, Ask, Component, FutureCollection};
 use omnipaxos::{storage::Snapshot, util::LogEntry};
 use serial_test::serial;
 use std::{sync::Arc, thread};
-use utils::{TestConfig, TestSystem, Value};
 
 const SNAPSHOT_INDEX_INCREMENT: usize = 10;
 
@@ -14,7 +12,7 @@ const SNAPSHOT_INDEX_INCREMENT: usize = 10;
 /// if the first [`gc_index`] are removed.
 #[test]
 #[serial]
-fn snapshot_test() {
+fn ec_snapshot_test() {
     let cfg = TestConfig::load("trim_test").expect("Test config loaded");
     let mut sys = TestSystem::with(cfg);
     sys.start_all_nodes();
@@ -23,7 +21,7 @@ fn snapshot_test() {
 
     thread::sleep(cfg.wait_timeout); // wait a little longer so that ALL nodes get prepared with empty logs
 
-    let vec_proposals = utils::create_proposals(1, cfg.num_proposals);
+    let vec_proposals = create_proposals(1, cfg.num_proposals);
     let mut futures = vec![];
     for v in &vec_proposals {
         let (kprom, kfuture) = promise::<()>();
@@ -66,7 +64,7 @@ fn snapshot_test() {
 /// if the first [`gc_index`] + an increment are removed.
 #[test]
 #[serial]
-fn double_snapshot_test() {
+fn ec_double_snapshot_test() {
     let cfg = TestConfig::load("trim_test").expect("Test config loaded");
     let mut sys = TestSystem::with(cfg);
     sys.start_all_nodes();
@@ -75,7 +73,7 @@ fn double_snapshot_test() {
 
     thread::sleep(cfg.wait_timeout); // wait a little longer so that ALL nodes get prepared with empty logs
 
-    let vec_proposals = utils::create_proposals(1, cfg.num_proposals);
+    let vec_proposals = create_proposals(1, cfg.num_proposals);
     let mut futures = vec![];
     for v in &vec_proposals {
         let (kprom, kfuture) = promise::<()>();

@@ -1,16 +1,14 @@
 #![cfg(feature = "toml_config")]
-pub mod utils;
-
+use crate::utils::Value;
 use omnipaxos::{util::FlexibleQuorum, OmniPaxosConfig};
 use omnipaxos_storage::memory_storage::MemoryStorage;
 use serial_test::serial;
-use utils::Value;
 
 /// Tests that all the fields of OmniPaxosConfig can be deserialized
 /// from a TOML file.
 #[test]
 #[serial]
-fn config_all_fields_test() {
+fn ec_config_all_fields_test() {
     let file_path = "tests/config/node1.toml";
     match OmniPaxosConfig::with_toml(file_path) {
         Err(e) => panic!("{e}"),

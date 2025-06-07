@@ -1,8 +1,6 @@
-pub mod utils;
-
+use crate::utils::{TestConfig, TestSystem};
 use serial_test::serial;
 use std::thread;
-use utils::{TestConfig, TestSystem};
 
 /// Test Ballot Election Leader module.
 /// The test waits for [`num_elections`] elections.
@@ -10,7 +8,7 @@ use utils::{TestConfig, TestSystem};
 /// until the number of elections is achieved.
 #[test]
 #[serial]
-fn ble_test() {
+fn ec_ble_test() {
     let cfg = TestConfig::load("ble_test").expect("Test config loaded");
     let mut sys = TestSystem::with(cfg);
     sys.start_all_nodes();

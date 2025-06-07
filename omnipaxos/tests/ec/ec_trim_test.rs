@@ -1,11 +1,9 @@
-pub mod utils;
-
 use crate::utils::omnireplica::OmniPaxosComponent;
+use crate::utils::{create_proposals, TestConfig, TestSystem, Value};
 use kompact::prelude::{promise, Ask, Component, FutureCollection};
 use omnipaxos::util::LogEntry;
 use serial_test::serial;
 use std::{sync::Arc, thread};
-use utils::{TestConfig, TestSystem, Value};
 
 const TRIM_INDEX_INCREMENT: usize = 10;
 
@@ -14,7 +12,7 @@ const TRIM_INDEX_INCREMENT: usize = 10;
 /// if the first [`gc_index`] are removed.
 #[test]
 #[serial]
-fn trim_test() {
+fn ec_trim_test() {
     let cfg = TestConfig::load("trim_test").expect("Test config loaded");
     assert_ne!(cfg.trim_idx, 0, "trim_idx must be greater than 0");
     let mut sys = TestSystem::with(cfg);
@@ -24,7 +22,7 @@ fn trim_test() {
 
     thread::sleep(cfg.wait_timeout); // wait a little longer so that ALL nodes get prepared with empty logs
 
-    let vec_proposals = utils::create_proposals(1, cfg.num_proposals);
+    let vec_proposals = create_proposals(1, cfg.num_proposals);
     let mut futures = vec![];
     let last = vec_proposals.last().unwrap();
     for node in sys.nodes.values() {
@@ -71,7 +69,7 @@ fn trim_test() {
 /// if the first [`gc_index`] + an increment are removed.
 #[test]
 #[serial]
-fn double_trim_test() {
+fn ec_double_trim_test() {
     let cfg = TestConfig::load("trim_test").expect("Test config loaded");
     assert_ne!(cfg.trim_idx, 0, "trim_idx must be greater than 0");
     assert!(
@@ -85,7 +83,7 @@ fn double_trim_test() {
 
     thread::sleep(cfg.wait_timeout); // wait a little longer so that ALL nodes get prepared with empty logs
 
-    let vec_proposals = utils::create_proposals(1, cfg.num_proposals);
+    let vec_proposals = create_proposals(1, cfg.num_proposals);
     let mut futures = vec![];
     let last = vec_proposals.last().unwrap();
     for node in sys.nodes.values() {

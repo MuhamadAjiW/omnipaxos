@@ -1,17 +1,17 @@
-pub mod utils;
-
+use crate::utils::{
+    create_proposals, verification::verify_log, StorageType, TestConfig, TestSystem, Value,
+};
 use kompact::prelude::{promise, Ask, FutureCollection, KFuture};
 use omnipaxos::util::{LogEntry, NodeId};
 use serial_test::serial;
 use std::{thread, time::Duration};
-use utils::{verification::verify_log, StorageType, TestConfig, TestSystem, Value};
 
 const SLEEP_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[test]
 #[serial]
 #[ignore]
-fn leader_fail_follower_propose_test() {
+fn ec_leader_fail_follower_propose_test() {
     let cfg = TestConfig::load("recovery_test").expect("Test config loaded");
     let mut sys = TestSystem::with(cfg);
     sys.start_all_nodes();
@@ -50,7 +50,7 @@ fn leader_fail_follower_propose_test() {
 #[test]
 #[serial]
 #[ignore]
-fn leader_fail_leader_propose_test() {
+fn ec_leader_fail_leader_propose_test() {
     let cfg = TestConfig::load("recovery_test").expect("Test config loaded");
     let mut sys = TestSystem::with(cfg);
     sys.start_all_nodes();
@@ -86,7 +86,7 @@ fn leader_fail_leader_propose_test() {
 #[test]
 #[serial]
 #[ignore]
-fn follower_fail_leader_propose_test() {
+fn ec_follower_fail_leader_propose_test() {
     let cfg = TestConfig::load("recovery_test").expect("Test config loaded");
     let mut sys = TestSystem::with(cfg);
     sys.start_all_nodes();
@@ -125,7 +125,7 @@ fn follower_fail_leader_propose_test() {
 #[test]
 #[serial]
 #[ignore]
-fn follower_fail_follower_propose_test() {
+fn ec_follower_fail_follower_propose_test() {
     let cfg = TestConfig::load("recovery_test").expect("Test config loaded");
     let mut sys = TestSystem::with(cfg);
     sys.start_all_nodes();
@@ -173,7 +173,7 @@ fn check_last_proposals(proposer: NodeId, recover: NodeId, sys: &TestSystem, cfg
         .get(&recover)
         .expect("No SequencePaxos component found");
 
-    let proposals = utils::create_proposals((cfg.num_proposals / 2) + 1, cfg.num_proposals);
+    let proposals = create_proposals((cfg.num_proposals / 2) + 1, cfg.num_proposals);
     let futures: Vec<KFuture<()>> = proposals
         .iter()
         .map(|v| {

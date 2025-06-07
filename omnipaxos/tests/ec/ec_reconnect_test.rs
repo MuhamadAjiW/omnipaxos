@@ -1,6 +1,8 @@
-pub mod utils;
-
 use crate::utils::STOPSIGN_ID;
+use crate::utils::{
+    verification::{verify_log, verify_stopsign},
+    TestConfig, TestSystem, Value,
+};
 use kompact::prelude::{promise, Ask};
 use omnipaxos::{
     messages::{sequence_paxos::PaxosMsg, Message},
@@ -10,10 +12,6 @@ use omnipaxos::{
 };
 use serial_test::serial;
 use std::{thread, time::Duration};
-use utils::{
-    verification::{verify_log, verify_stopsign},
-    TestConfig, TestSystem, Value,
-};
 
 const SLEEP_TIMEOUT: Duration = Duration::from_secs(1);
 const INITIAL_PROPOSALS: u64 = 5;
@@ -24,7 +22,7 @@ const SECOND_PROPOSALS: u64 = 5;
 /// with increasing sequence numbers.
 #[test]
 #[serial]
-fn increasing_accept_seq_num_test() {
+fn ec_increasing_accept_seq_num_test() {
     // Start Kompact system
     let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystem::with(cfg);
@@ -90,7 +88,7 @@ fn increasing_accept_seq_num_test() {
 /// with the same leader.
 #[test]
 #[serial]
-fn reconnect_after_dropped_accepts_test() {
+fn ec_reconnect_after_dropped_accepts_test() {
     // Start Kompact system
     let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystem::with(cfg);
@@ -150,7 +148,7 @@ fn reconnect_after_dropped_accepts_test() {
 /// eventually receives a prepare from the new leader.
 #[test]
 #[serial]
-fn reconnect_after_dropped_prepare_test() {
+fn ec_reconnect_after_dropped_prepare_test() {
     // Start Kompact system
     let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystem::with(cfg);
@@ -226,7 +224,7 @@ fn reconnect_after_dropped_prepare_test() {
 /// eventually receives a Promise from the follower.
 #[test]
 #[serial]
-fn reconnect_after_dropped_promise_test() {
+fn ec_reconnect_after_dropped_promise_test() {
     // Start Kompact system
     let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystem::with(cfg);
@@ -308,7 +306,7 @@ fn reconnect_after_dropped_promise_test() {
 /// receives a PrepareReq.
 #[test]
 #[serial]
-fn reconnect_after_dropped_preparereq_test() {
+fn ec_reconnect_after_dropped_preparereq_test() {
     // Start Kompact system
     let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystem::with(cfg);
@@ -374,7 +372,7 @@ fn reconnect_after_dropped_preparereq_test() {
 /// correctly syncs the decided stopsign in the sync phase.
 #[test]
 #[serial]
-fn resync_after_dropped_acceptstopsign_test() {
+fn ec_resync_after_dropped_acceptstopsign_test() {
     // Start Kompact system
     let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystem::with(cfg);
@@ -433,7 +431,7 @@ fn resync_after_dropped_acceptstopsign_test() {
 /// AcceptStopSign.
 #[test]
 #[serial]
-fn reconnect_after_dropped_acceptstopsign_test() {
+fn ec_reconnect_after_dropped_acceptstopsign_test() {
     // Start Kompact system
     let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystem::with(cfg);
@@ -501,7 +499,7 @@ fn reconnect_after_dropped_acceptstopsign_test() {
 /// eventually receives the missed DecideStopSign.
 #[test]
 #[serial]
-fn reconnect_after_dropped_decidestopsign_test() {
+fn ec_reconnect_after_dropped_decidestopsign_test() {
     // Start Kompact system
     let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystem::with(cfg);

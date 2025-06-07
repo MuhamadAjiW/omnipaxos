@@ -1,13 +1,11 @@
-pub mod utils;
-
 use crate::utils::STOPSIGN_ID;
-use kompact::prelude::{promise, Ask, FutureCollection};
-use omnipaxos::{storage::StopSign, util::NodeId, ClusterConfig};
-use serial_test::serial;
-use utils::{
+use crate::utils::{
     verification::{verify_log, verify_stopsign},
     TestConfig, TestSystem, Value,
 };
+use kompact::prelude::{promise, Ask, FutureCollection};
+use omnipaxos::{storage::StopSign, util::NodeId, ClusterConfig};
+use serial_test::serial;
 
 /// The state of the leader's and follower's log at the time of a sync
 #[derive(Default)]
@@ -26,7 +24,7 @@ struct SyncTest {
 /// has invalid undecided entries.
 #[test]
 #[serial]
-fn sync_full_test() {
+fn ec_sync_full_test() {
     // Define leader's log
     let leaders_log = [1, 2, 3, 4, 5, 10, 11, 12]
         .into_iter()
@@ -62,7 +60,7 @@ fn sync_full_test() {
 /// decided entries and has invalid undecided entries.
 #[test]
 #[serial]
-fn sync_decided_ss_test() {
+fn ec_sync_decided_ss_test() {
     // Define leader's log
     let leaders_log = [1, 2, 3, 4, 5].into_iter().map(Value::with_id).collect();
     let leaders_dec_idx = 6;
@@ -89,7 +87,7 @@ fn sync_decided_ss_test() {
 /// Tests that a leader whose log consists of only a stopsign correctly syncs the follower.
 #[test]
 #[serial]
-fn sync_only_stopsign_test() {
+fn ec_sync_only_stopsign_test() {
     // Define leader's log
     let leaders_dec_idx = 1;
     let cluster_config = ClusterConfig::default();
@@ -113,7 +111,7 @@ fn sync_only_stopsign_test() {
 /// merges onto their empty log.
 #[test]
 #[serial]
-fn sync_only_snapshot_test() {
+fn ec_sync_only_snapshot_test() {
     // Define leader's log
     let leaders_log: Vec<Value> = [1, 2, 3].into_iter().map(Value::with_id).collect();
     let leaders_dec_idx = 3;
@@ -136,7 +134,7 @@ fn sync_only_snapshot_test() {
 /// the partly-snapshotted decided entries of the follower.
 #[test]
 #[serial]
-fn sync_follower_snapshot_test() {
+fn ec_sync_follower_snapshot_test() {
     // Define leader's log
     let leaders_log = [1, 2, 3, 4, 5].into_iter().map(Value::with_id).collect();
     let leaders_dec_idx = 5;

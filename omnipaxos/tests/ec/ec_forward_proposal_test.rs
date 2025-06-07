@@ -1,16 +1,14 @@
-pub mod utils;
-
+use crate::utils::{TestConfig, TestSystem, Value};
 use kompact::prelude::{promise, Ask};
 use omnipaxos::{ballot_leader_election::Ballot, util::NodeId};
 use rand::Rng;
 use serial_test::serial;
-use utils::{TestConfig, TestSystem, Value};
 
 /// Verifies if the follower nodes forwards the proposal message to a leader
 /// so it can get decided.
 #[test]
 #[serial]
-fn forward_proposal_test() {
+fn ec_forward_proposal_test() {
     let cfg = TestConfig::load("proposal_test").expect("Test config loaded");
     let mut sys = TestSystem::with(cfg);
 

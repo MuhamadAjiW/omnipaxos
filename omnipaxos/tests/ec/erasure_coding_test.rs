@@ -15,7 +15,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_decode_full() {
+    fn ec_test_encode_decode_full() {
         let ec = setup_ec_service(4, 2);
         let original_data = sample_data(100);
 
@@ -44,7 +44,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_decode_missing_data_shards() {
+    fn ec_test_encode_decode_missing_data_shards() {
         let ec = setup_ec_service(5, 3);
         let original_data = sample_data(500);
 
@@ -66,7 +66,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_decode_missing_parity_shards() {
+    fn ec_test_encode_decode_missing_parity_shards() {
         let ec = setup_ec_service(4, 2);
         let original_data = sample_data(250);
 
@@ -87,7 +87,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_decode_missing_mixed_shards() {
+    fn ec_test_encode_decode_missing_mixed_shards() {
         let ec = setup_ec_service(6, 4);
         let original_data = sample_data(1024);
 
@@ -110,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_decode_too_many_missing_shards() {
+    fn ec_test_encode_decode_too_many_missing_shards() {
         let ec = setup_ec_service(3, 2);
         let original_data = sample_data(200);
 
@@ -129,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_empty_data() {
+    fn ec_test_encode_empty_data() {
         let ec = setup_ec_service(3, 2);
         let original_data = vec![];
 
@@ -157,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_no_padding() {
+    fn ec_test_encode_no_padding() {
         let ec = setup_ec_service(4, 2);
         let original_data_len = 251; // Prime length
         let total_data_len_with_prefix_base = original_data_len + ECService::LENGTH_PREFIX_BYTES;
@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_decode_different_configs() {
+    fn ec_test_encode_decode_different_configs() {
         let configs = vec![(3, 1), (5, 2), (10, 4), (1, 1), (2, 2)];
 
         for (shard_count, parity_count) in configs {

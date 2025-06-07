@@ -1,28 +1,22 @@
-pub mod utils;
-
-use crate::utils::STOPSIGN_ID;
+use crate::utils::{create_proposals, STOPSIGN_ID};
+use crate::utils::{TestConfig, TestSystem, Value};
 use kompact::prelude::{promise, Ask};
 use omnipaxos::{
     util::{LogEntry, NodeId},
     ClusterConfig,
 };
 use serial_test::serial;
-use utils::{TestConfig, TestSystem, Value};
 
 const SS_METADATA: u8 = 255;
 
 /// Verifies that the decided StopSign is correct and error is returned when trying to append after decided StopSign.
 #[test]
 #[serial]
-fn reconfig_test() {
+fn ec_reconfig_test() {
     let cfg = TestConfig::load("consensus_test").expect("Test config loaded");
     let mut sys = TestSystem::with(cfg);
     sys.start_all_nodes();
-    sys.make_proposals(
-        1,
-        utils::create_proposals(1, cfg.num_proposals),
-        cfg.wait_timeout,
-    );
+    sys.make_proposals(1, create_proposals(1, cfg.num_proposals), cfg.wait_timeout);
 
     let new_config_id = 2;
     let new_nodes: Vec<NodeId> = (cfg.num_nodes as NodeId..(cfg.num_nodes as NodeId + 3)).collect();

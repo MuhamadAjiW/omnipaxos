@@ -1,26 +1,25 @@
-pub mod utils;
-
+use crate::utils::{
+    create_proposals, create_temp_dir, verification::*, StorageType, TestConfig, TestSystem, Value,
+    ValueSnapshot,
+};
 use kompact::prelude::{promise, Ask, FutureCollection};
 use omnipaxos::{
     storage::{Snapshot, StopSign, Storage},
     ClusterConfig, OmniPaxosConfig,
 };
 use serial_test::serial;
-use utils::{
-    create_temp_dir, verification::*, StorageType, TestConfig, TestSystem, Value, ValueSnapshot,
-};
 
 /// Verifies the 3 properties that the Paxos algorithm offers
 /// Quorum, Validity, Uniform Agreement
 #[test]
 #[serial]
-fn consensus_test() {
+fn ec_consensus_test() {
     let cfg = TestConfig::load("consensus_test").expect("Test config loaded");
     let mut sys = TestSystem::with(cfg);
 
     let first_node = sys.nodes.get(&1).unwrap();
     let mut futures = vec![];
-    let vec_proposals = utils::create_proposals(1, cfg.num_proposals);
+    let vec_proposals = create_proposals(1, cfg.num_proposals);
     for v in &vec_proposals {
         let (kprom, kfuture) = promise::<()>();
         first_node.on_definition(|x| {
@@ -60,7 +59,7 @@ fn consensus_test() {
 
 #[test]
 #[serial]
-fn read_test() {
+fn ec_read_test() {
     let cfg = TestConfig::load("consensus_test").expect("Test config loaded");
 
     let log: Vec<Value> = [1, 3, 2, 7, 5, 10, 29, 100, 8, 12]
@@ -150,7 +149,7 @@ fn read_test() {
 
 #[test]
 #[serial]
-fn read_entries_test() {
+fn ec_read_entries_test() {
     let cfg = TestConfig::load("consensus_test").expect("Test config loaded");
 
     let log: Vec<Value> = [1, 3, 2, 7, 5, 10, 29, 100, 8, 12]

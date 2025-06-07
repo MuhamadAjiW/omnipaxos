@@ -1,15 +1,13 @@
-pub mod utils;
-
+use crate::utils::{create_proposals, TestConfig, TestSystem};
 use kompact::prelude::{promise, Ask, FutureCollection};
 use omnipaxos::ballot_leader_election::Ballot;
 use serial_test::serial;
 use std::{thread, time::Duration};
-use utils::{TestConfig, TestSystem};
 
 /// Test case for batching.
 #[test]
 #[serial]
-fn batching_test() {
+fn ec_batching_test() {
     let wait_time_between_propose = Duration::from_millis(2);
 
     let cfg = TestConfig::load("batching_test").expect("Test config loaded");
@@ -27,7 +25,7 @@ fn batching_test() {
 
     let mut futures = vec![];
     let mut last_decided_idx = 0;
-    let proposals = utils::create_proposals(1, cfg.num_proposals);
+    let proposals = create_proposals(1, cfg.num_proposals);
     for v in proposals {
         let (kprom, kfuture) = promise::<()>();
         first_node.on_definition(|x| {
