@@ -1,12 +1,13 @@
 use super::{internal_storage::InternalStorageConfig, Entry, StopSign};
-use crate::ballot_leader_election::Ballot;
+use crate::{ballot_leader_election::Ballot, storage::ClusterConfigTrait};
 #[cfg(feature = "unicache")]
 use crate::{unicache::*, util::NodeId};
 
 /// A simple in-memory storage for simple state values of OmniPaxos.
-pub(super) struct StateCache<T>
+pub(super) struct StateCache<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
     #[cfg(feature = "unicache")]
     /// Id of this node
@@ -26,17 +27,17 @@ where
     /// Garbage collected index.
     pub compacted_idx: usize,
     /// Stopsign entry.
-    pub stopsign: Option<StopSign>,
+    pub stopsign: Option<StopSign<C>>,
     #[cfg(feature = "unicache")]
     /// Batch of entries that are processed (i.e., maybe encoded). Only used by the leader.
     pub batched_processed_by_leader: Vec<T::EncodeResult>,
     #[cfg(feature = "unicache")]
     pub unicache: T::UniCache,
 }
-
-impl<T> StateCache<T>
+impl<T, C> StateCache<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
     pub(super) fn new(
         config: InternalStorageConfig,
@@ -91,7 +92,7 @@ where
 
     // Flushes batched entries and appends a stopsign to the log. Returns the flushed
     // entries if there were any
-    pub(super) fn append_stopsign(&mut self, ss: StopSign) -> Option<Vec<T>> {
+    pub(super) fn append_stopsign(&mut self, ss: StopSign<C>) -> Option<Vec<T>> {
         self.stopsign = Some(ss);
         if self.batched_entries.is_empty() {
             None

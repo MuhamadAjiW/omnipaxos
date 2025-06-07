@@ -1,4 +1,4 @@
-use crate::utils::{TestConfig, TestSystem, Value};
+use crate::ec::utils::{TestConfigEC, TestECEntry, TestSystemEC};
 use kompact::prelude::{promise, Ask};
 use omnipaxos::{ballot_leader_election::Ballot, util::NodeId};
 use rand::Rng;
@@ -9,8 +9,8 @@ use serial_test::serial;
 #[test]
 #[serial]
 fn ec_forward_proposal_test() {
-    let cfg = TestConfig::load("proposal_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("proposal_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
 
     let first_node = sys.nodes.get(&1).unwrap();
     let (kprom_ble, kfuture_ble) = promise::<Ballot>();
@@ -33,7 +33,7 @@ fn ec_forward_proposal_test() {
     }
 
     let px = sys.nodes.get(&proposal_node).unwrap();
-    let v = Value::with_id(proposal_node);
+    let v = TestECEntry::dummy(proposal_node);
     let (kprom, kfuture) = promise();
     px.on_definition(|x| {
         x.insert_decided_future(Ask::new(kprom, v.clone()));

@@ -15,14 +15,14 @@ mod kv;
 mod server;
 mod util;
 
-type OmniPaxosKV = OmniPaxos<KeyValue, MemoryStorage<KeyValue>>;
+type OmniPaxosKV = OmniPaxos<KeyValue, MemoryStorage<KeyValue, ClusterConfig>>;
 
 const SERVERS: [NodeId; 3] = [1, 2, 3];
 
 #[allow(clippy::type_complexity)]
 fn initialise_channels() -> (
-    HashMap<NodeId, mpsc::Sender<Message<KeyValue>>>,
-    HashMap<NodeId, mpsc::Receiver<Message<KeyValue>>>,
+    HashMap<NodeId, mpsc::Sender<Message<KeyValue, ClusterConfig>>>,
+    HashMap<NodeId, mpsc::Receiver<Message<KeyValue, ClusterConfig>>>,
 ) {
     let mut sender_channels = HashMap::new();
     let mut receiver_channels = HashMap::new();

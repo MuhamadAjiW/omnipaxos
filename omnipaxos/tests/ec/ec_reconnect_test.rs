@@ -1,14 +1,14 @@
-use crate::utils::STOPSIGN_ID;
-use crate::utils::{
+use crate::ec::utils::STOPSIGN_ID;
+use crate::ec::utils::{
     verification::{verify_log, verify_stopsign},
-    TestConfig, TestSystem, Value,
+    TestConfigEC, TestECEntry, TestSystemEC,
 };
 use kompact::prelude::{promise, Ask};
 use omnipaxos::{
     messages::{sequence_paxos::PaxosMsg, Message},
     storage::StopSign,
     util::{LogEntry, NodeId, SequenceNumber},
-    ClusterConfig,
+    ClusterConfigEC,
 };
 use serial_test::serial;
 use std::{thread, time::Duration};
@@ -24,13 +24,15 @@ const SECOND_PROPOSALS: u64 = 5;
 #[serial]
 fn ec_increasing_accept_seq_num_test() {
     // Start Kompact system
-    let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let initial_proposals: Vec<Value> = (0..INITIAL_PROPOSALS).map(Value::with_id).collect();
-    let leaders_proposals: Vec<Value> = (INITIAL_PROPOSALS..INITIAL_PROPOSALS + SECOND_PROPOSALS)
-        .map(Value::with_id)
+    let initial_proposals: Vec<TestECEntry> =
+        (0..INITIAL_PROPOSALS).map(TestECEntry::dummy).collect();
+    let leaders_proposals: Vec<TestECEntry> = (INITIAL_PROPOSALS
+        ..INITIAL_PROPOSALS + SECOND_PROPOSALS)
+        .map(TestECEntry::dummy)
         .collect();
     // We skip seq# 1 (AcceptSync), 2 (batched initial_proposals), and 3 (decide initial_proposals)
     let expected_seq_nums: Vec<SequenceNumber> = (4..4 + SECOND_PROPOSALS)
@@ -90,20 +92,20 @@ fn ec_increasing_accept_seq_num_test() {
 #[serial]
 fn ec_reconnect_after_dropped_accepts_test() {
     // Start Kompact system
-    let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let initial_proposals = (0..INITIAL_PROPOSALS).map(Value::with_id).collect();
+    let initial_proposals = (0..INITIAL_PROPOSALS).map(TestECEntry::dummy).collect();
     let unseen_by_follower_proposals = (INITIAL_PROPOSALS..INITIAL_PROPOSALS + DROPPED_PROPOSALS)
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
     let seen_by_follower_proposals = (INITIAL_PROPOSALS + DROPPED_PROPOSALS
         ..INITIAL_PROPOSALS + DROPPED_PROPOSALS + SECOND_PROPOSALS)
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
     let expected_log = (0..INITIAL_PROPOSALS + DROPPED_PROPOSALS + SECOND_PROPOSALS)
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
 
     // Propose some values so that a leader is elected
@@ -131,7 +133,8 @@ fn ec_reconnect_after_dropped_accepts_test() {
     thread::sleep(SLEEP_TIMEOUT);
 
     // Verify log
-    let followers_log: Vec<LogEntry<Value>> = follower.on_definition(|x| x.read_decided_log());
+    let followers_log: Vec<LogEntry<TestECEntry>> =
+        follower.on_definition(|x| x.read_decided_log());
     verify_log(followers_log, expected_log);
 
     // Shutdown system
@@ -150,16 +153,16 @@ fn ec_reconnect_after_dropped_accepts_test() {
 #[serial]
 fn ec_reconnect_after_dropped_prepare_test() {
     // Start Kompact system
-    let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let initial_proposals = (0..INITIAL_PROPOSALS).map(Value::with_id).collect();
+    let initial_proposals = (0..INITIAL_PROPOSALS).map(TestECEntry::dummy).collect();
     let unseen_by_follower_proposals = (INITIAL_PROPOSALS..INITIAL_PROPOSALS + DROPPED_PROPOSALS)
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
     let expected_log = (0..INITIAL_PROPOSALS + DROPPED_PROPOSALS)
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
 
     // Propose some values so that a leader is elected
@@ -207,7 +210,8 @@ fn ec_reconnect_after_dropped_prepare_test() {
     }
     thread::sleep(SLEEP_TIMEOUT);
 
-    let followers_log: Vec<LogEntry<Value>> = follower.on_definition(|x| x.read_decided_log());
+    let followers_log: Vec<LogEntry<TestECEntry>> =
+        follower.on_definition(|x| x.read_decided_log());
     verify_log(followers_log, expected_log);
 
     // Shutdown system
@@ -226,16 +230,16 @@ fn ec_reconnect_after_dropped_prepare_test() {
 #[serial]
 fn ec_reconnect_after_dropped_promise_test() {
     // Start Kompact system
-    let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let initial_proposals = (0..INITIAL_PROPOSALS).map(Value::with_id).collect();
+    let initial_proposals = (0..INITIAL_PROPOSALS).map(TestECEntry::dummy).collect();
     let unseen_by_follower_proposals = (INITIAL_PROPOSALS..INITIAL_PROPOSALS + DROPPED_PROPOSALS)
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
     let expected_log = (0..INITIAL_PROPOSALS + DROPPED_PROPOSALS)
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
 
     // Propose some values so that a leader is elected
@@ -289,7 +293,8 @@ fn ec_reconnect_after_dropped_promise_test() {
     thread::sleep(SLEEP_TIMEOUT);
 
     // Verify log
-    let followers_log: Vec<LogEntry<Value>> = follower.on_definition(|x| x.read_decided_log());
+    let followers_log: Vec<LogEntry<TestECEntry>> =
+        follower.on_definition(|x| x.read_decided_log());
     verify_log(followers_log, expected_log);
 
     // Shutdown system
@@ -308,20 +313,20 @@ fn ec_reconnect_after_dropped_promise_test() {
 #[serial]
 fn ec_reconnect_after_dropped_preparereq_test() {
     // Start Kompact system
-    let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let initial_proposals = (0..INITIAL_PROPOSALS).map(Value::with_id).collect();
+    let initial_proposals = (0..INITIAL_PROPOSALS).map(TestECEntry::dummy).collect();
     let unseen_by_follower_proposals = (INITIAL_PROPOSALS..INITIAL_PROPOSALS + DROPPED_PROPOSALS)
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
     let seen_by_follower_proposals = (INITIAL_PROPOSALS + DROPPED_PROPOSALS
         ..INITIAL_PROPOSALS + DROPPED_PROPOSALS + SECOND_PROPOSALS)
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
     let expected_log = (0..INITIAL_PROPOSALS + DROPPED_PROPOSALS + SECOND_PROPOSALS)
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
 
     // Propose some values so that a leader is elected
@@ -355,7 +360,8 @@ fn ec_reconnect_after_dropped_preparereq_test() {
     // Wait for Re-Sync with leader to finish
     thread::sleep(SLEEP_TIMEOUT);
 
-    let followers_log: Vec<LogEntry<Value>> = follower.on_definition(|x| x.read_decided_log());
+    let followers_log: Vec<LogEntry<TestECEntry>> =
+        follower.on_definition(|x| x.read_decided_log());
     verify_log(followers_log, expected_log);
 
     // Shutdown system
@@ -374,8 +380,8 @@ fn ec_reconnect_after_dropped_preparereq_test() {
 #[serial]
 fn ec_resync_after_dropped_acceptstopsign_test() {
     // Start Kompact system
-    let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
     let leader_id = sys.get_elected_leader(2, cfg.wait_timeout);
@@ -386,7 +392,7 @@ fn ec_resync_after_dropped_acceptstopsign_test() {
     let follower = sys.nodes.get(&follower_id).unwrap();
 
     // Disconnect leader from follower and start reconfigure
-    let next_config = ClusterConfig {
+    let next_config = ClusterConfigEC {
         configuration_id: 2,
         nodes: vec![1, 2],
         flexible_quorum: None,
@@ -402,7 +408,7 @@ fn ec_resync_after_dropped_acceptstopsign_test() {
 
     // Force follower to become leader and wait for follower to decide the stopsign
     let (kprom, kfuture) = promise::<()>();
-    let value = Value::with_id(STOPSIGN_ID);
+    let value = TestECEntry::dummy(STOPSIGN_ID);
     follower.on_definition(|x| {
         x.insert_decided_future(Ask::new(kprom, value));
     });
@@ -412,8 +418,9 @@ fn ec_resync_after_dropped_acceptstopsign_test() {
         .expect("Timeout for collecting future of decided proposal expired");
 
     // Verify log
-    let followers_log: Vec<LogEntry<Value>> = follower.on_definition(|x| x.read_decided_log());
-    verify_stopsign(&followers_log, &StopSign::with(next_config, None));
+    let followers_log: Vec<LogEntry<TestECEntry>> =
+        follower.on_definition(|x| x.read_decided_log());
+    verify_stopsign(&followers_log, &StopSign::with(next_config.into(), None));
 
     // Shutdown system
     println!("Passed reconnect_to_leader_test!");
@@ -433,8 +440,8 @@ fn ec_resync_after_dropped_acceptstopsign_test() {
 #[serial]
 fn ec_reconnect_after_dropped_acceptstopsign_test() {
     // Start Kompact system
-    let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
     let leader_id = sys.get_elected_leader(1, cfg.wait_timeout);
@@ -454,7 +461,7 @@ fn ec_reconnect_after_dropped_acceptstopsign_test() {
     for other_follower in followers.clone() {
         sys.kill_node(other_follower);
     }
-    let next_config = ClusterConfig {
+    let next_config = ClusterConfigEC {
         configuration_id: 2,
         nodes: vec![1, 2],
         flexible_quorum: None,
@@ -478,11 +485,11 @@ fn ec_reconnect_after_dropped_acceptstopsign_test() {
 
     // Verify log
     let follower = sys.nodes.get(&follower_id).unwrap();
-    let followers_log: Vec<LogEntry<Value>> =
+    let followers_log: Vec<LogEntry<TestECEntry>> =
         follower.on_definition(|x| x.paxos.read_entries(0..1).expect("Cannot read log entry"));
     verify_stopsign(
         &followers_log,
-        &StopSign::with(next_config, Some(vec![1, 2, 3])),
+        &StopSign::with(next_config.into(), Some(vec![1, 2, 3])),
     );
 
     // Shutdown system
@@ -501,8 +508,8 @@ fn ec_reconnect_after_dropped_acceptstopsign_test() {
 #[serial]
 fn ec_reconnect_after_dropped_decidestopsign_test() {
     // Start Kompact system
-    let cfg = TestConfig::load("reconnect_test").expect("Test config couldn't be loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
     let leader_id = sys.get_elected_leader(1, cfg.wait_timeout);
@@ -511,7 +518,7 @@ fn ec_reconnect_after_dropped_decidestopsign_test() {
     let leader = sys.nodes.get(&leader_id).unwrap();
 
     // Disconnect follower from everyone and then decide a StopSign
-    let next_config = ClusterConfig {
+    let next_config = ClusterConfigEC {
         configuration_id: 2,
         nodes: vec![1, 2],
         flexible_quorum: None,

@@ -1,13 +1,14 @@
 use omnipaxos::{
     ballot_leader_election::Ballot,
-    storage::{Entry, StopSign, Storage, StorageOp, StorageResult},
+    storage::{ClusterConfigTrait, Entry, StopSign, Storage, StorageOp, StorageResult},
 };
 
 /// An in-memory storage implementation for SequencePaxos.
 #[derive(Clone)]
-pub struct MemoryStorage<T>
+pub struct MemoryStorage<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
     /// Vector which contains all the logged entries in-memory.
     log: Vec<T>,
@@ -24,14 +25,15 @@ where
     /// Stored snapshot
     snapshot: Option<T::Snapshot>,
     /// Stored StopSign
-    stopsign: Option<StopSign>,
+    stopsign: Option<StopSign<C>>,
 }
 
-impl<T> Storage<T> for MemoryStorage<T>
+impl<T, C> Storage<T, C> for MemoryStorage<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
-    fn write_atomically(&mut self, ops: Vec<StorageOp<T>>) -> StorageResult<()> {
+    fn write_atomically(&mut self, ops: Vec<StorageOp<T, C>>) -> StorageResult<()> {
         for op in ops {
             match op {
                 StorageOp::AppendEntry(entry) => self.append_entry(entry)?,
@@ -111,12 +113,12 @@ where
         Ok(self.n_prom)
     }
 
-    fn set_stopsign(&mut self, s: Option<StopSign>) -> StorageResult<()> {
+    fn set_stopsign(&mut self, s: Option<StopSign<C>>) -> StorageResult<()> {
         self.stopsign = s;
         Ok(())
     }
 
-    fn get_stopsign(&self) -> StorageResult<Option<StopSign>> {
+    fn get_stopsign(&self) -> StorageResult<Option<StopSign<C>>> {
         Ok(self.stopsign.clone())
     }
 
@@ -146,7 +148,7 @@ where
     }
 }
 
-impl<T: Entry> Default for MemoryStorage<T> {
+impl<T: Entry, C: ClusterConfigTrait> Default for MemoryStorage<T, C> {
     fn default() -> Self {
         Self {
             log: vec![],

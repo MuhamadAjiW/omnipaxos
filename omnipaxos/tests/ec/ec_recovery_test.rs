@@ -1,5 +1,6 @@
-use crate::utils::{
-    create_proposals, verification::verify_log, StorageType, TestConfig, TestSystem, Value,
+use crate::ec::utils::{
+    create_proposals, verification::verify_log, StorageTypeEC, TestConfigEC, TestECEntry,
+    TestSystemEC,
 };
 use kompact::prelude::{promise, Ask, FutureCollection, KFuture};
 use omnipaxos::util::{LogEntry, NodeId};
@@ -12,11 +13,11 @@ const SLEEP_TIMEOUT: Duration = Duration::from_secs(1);
 #[serial]
 #[ignore]
 fn ec_leader_fail_follower_propose_test() {
-    let cfg = TestConfig::load("recovery_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("recovery_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let proposals: Vec<Value> = (1..=cfg.num_proposals).map(Value::with_id).collect();
+    let proposals: Vec<TestECEntry> = (1..=cfg.num_proposals).map(TestECEntry::dummy).collect();
     let initial_proposals = proposals[0..(cfg.num_proposals / 2) as usize].to_vec();
     sys.make_proposals(1, initial_proposals, cfg.wait_timeout);
     let leader = sys.get_elected_leader(1, cfg.wait_timeout);
@@ -33,7 +34,7 @@ fn ec_leader_fail_follower_propose_test() {
         .nodes
         .get(&leader)
         .expect("No SequencePaxos component found");
-    let read_log: Vec<LogEntry<Value>> = recovery_px.on_definition(|x| x.read_decided_log());
+    let read_log: Vec<LogEntry<TestECEntry>> = recovery_px.on_definition(|x| x.read_decided_log());
 
     verify_log(read_log, proposals);
 
@@ -51,11 +52,11 @@ fn ec_leader_fail_follower_propose_test() {
 #[serial]
 #[ignore]
 fn ec_leader_fail_leader_propose_test() {
-    let cfg = TestConfig::load("recovery_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("recovery_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let proposals: Vec<Value> = (1..=cfg.num_proposals).map(Value::with_id).collect();
+    let proposals: Vec<TestECEntry> = (1..=cfg.num_proposals).map(TestECEntry::dummy).collect();
     let initial_proposals = proposals[0..(cfg.num_proposals / 2) as usize].to_vec();
     sys.make_proposals(1, initial_proposals, cfg.wait_timeout);
     let leader = sys.get_elected_leader(1, cfg.wait_timeout);
@@ -69,7 +70,7 @@ fn ec_leader_fail_leader_propose_test() {
         .nodes
         .get(&leader)
         .expect("No SequencePaxos component found");
-    let read_log: Vec<LogEntry<Value>> = recovery_px.on_definition(|x| x.read_decided_log());
+    let read_log: Vec<LogEntry<TestECEntry>> = recovery_px.on_definition(|x| x.read_decided_log());
 
     verify_log(read_log, proposals);
 
@@ -87,11 +88,11 @@ fn ec_leader_fail_leader_propose_test() {
 #[serial]
 #[ignore]
 fn ec_follower_fail_leader_propose_test() {
-    let cfg = TestConfig::load("recovery_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("recovery_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let proposals: Vec<Value> = (1..=cfg.num_proposals).map(Value::with_id).collect();
+    let proposals: Vec<TestECEntry> = (1..=cfg.num_proposals).map(TestECEntry::dummy).collect();
     let initial_proposals = proposals[0..(cfg.num_proposals / 2) as usize].to_vec();
     sys.make_proposals(1, initial_proposals, cfg.wait_timeout);
     let leader = sys.get_elected_leader(1, cfg.wait_timeout);
@@ -108,7 +109,7 @@ fn ec_follower_fail_leader_propose_test() {
         .nodes
         .get(&leader)
         .expect("No SequencePaxos component found");
-    let read_log: Vec<LogEntry<Value>> = recovery_px.on_definition(|x| x.read_decided_log());
+    let read_log: Vec<LogEntry<TestECEntry>> = recovery_px.on_definition(|x| x.read_decided_log());
 
     verify_log(read_log, proposals);
 
@@ -126,11 +127,11 @@ fn ec_follower_fail_leader_propose_test() {
 #[serial]
 #[ignore]
 fn ec_follower_fail_follower_propose_test() {
-    let cfg = TestConfig::load("recovery_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("recovery_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let proposals: Vec<Value> = (1..=cfg.num_proposals).map(Value::with_id).collect();
+    let proposals: Vec<TestECEntry> = (1..=cfg.num_proposals).map(TestECEntry::dummy).collect();
     let initial_proposals = proposals[0..(cfg.num_proposals / 2) as usize].to_vec();
     sys.make_proposals(1, initial_proposals, cfg.wait_timeout);
     let leader = sys.get_elected_leader(1, cfg.wait_timeout);
@@ -147,7 +148,7 @@ fn ec_follower_fail_follower_propose_test() {
         .nodes
         .get(&leader)
         .expect("No SequencePaxos component found");
-    let read_log: Vec<LogEntry<Value>> = recovery_px.on_definition(|x| x.read_decided_log());
+    let read_log: Vec<LogEntry<TestECEntry>> = recovery_px.on_definition(|x| x.read_decided_log());
 
     verify_log(read_log, proposals);
 
@@ -163,7 +164,7 @@ fn ec_follower_fail_follower_propose_test() {
 
 /// Propose and check that the last proposals are decided by the
 /// recovered node. The recovered node can also be the proposer
-fn check_last_proposals(proposer: NodeId, recover: NodeId, sys: &TestSystem, cfg: &TestConfig) {
+fn check_last_proposals(proposer: NodeId, recover: NodeId, sys: &TestSystemEC, cfg: &TestConfigEC) {
     let proposer_px = sys
         .nodes
         .get(&proposer)
@@ -198,13 +199,13 @@ fn check_last_proposals(proposer: NodeId, recover: NodeId, sys: &TestSystem, cfg
 }
 
 /// Kill and recover node given its 'pid' after some time.
-pub fn kill_and_recover_node(sys: &mut TestSystem, cfg: &TestConfig, pid: NodeId) {
+pub fn kill_and_recover_node(sys: &mut TestSystemEC, cfg: &TestConfigEC, pid: NodeId) {
     sys.kill_node(pid);
     thread::sleep(SLEEP_TIMEOUT);
 
     let storage_path = sys.temp_dir_path.clone();
-    let storage: StorageType<Value> =
-        StorageType::with(cfg.storage_type, &format!("{storage_path}{pid}"));
+    let storage: StorageTypeEC<TestECEntry> =
+        StorageTypeEC::with(cfg.storage_type, &format!("{storage_path}{pid}"));
     sys.create_node(pid, cfg, storage);
     sys.start_node(pid);
 }

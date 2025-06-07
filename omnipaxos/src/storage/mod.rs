@@ -4,9 +4,15 @@ mod state_cache;
 use super::ballot_leader_election::Ballot;
 #[cfg(feature = "unicache")]
 use crate::unicache::*;
-use crate::ClusterConfig;
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt::Debug};
+
+/// Trait for cluster configuration. It is used to define the cluster configuration for OmniPaxos.
+/// Depends on the kind of paxos you are using, e.g., OmniPaxos or OmniPaxosEC.
+pub trait ClusterConfigTrait: Clone + Debug + Serialize + PartialEq {}
+
+impl ClusterConfigTrait for crate::ClusterConfig {}
+impl ClusterConfigTrait for crate::omni_paxos_ec::ClusterConfigEC {}
 
 /// Type of the entries stored in the log.
 pub trait Entry: Clone + Debug {
@@ -34,16 +40,16 @@ pub trait Entry: Clone + Debug {
 
 /// A StopSign entry that marks the end of a configuration. Used for reconfiguration.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct StopSign {
-    /// The new `Omnipaxos` cluster configuration
-    pub next_config: ClusterConfig,
-    /// Metadata for the reconfiguration.
+pub struct StopSign<C: ClusterConfigTrait> {
+    /// The new cluster configuration.
+    pub next_config: C,
+    /// Metadata for the reconfiguration, if any.
     pub metadata: Option<Vec<u8>>,
 }
 
-impl StopSign {
+impl<C: ClusterConfigTrait> StopSign<C> {
     /// Creates a [`StopSign`].
-    pub fn with(next_config: ClusterConfig, metadata: Option<Vec<u8>>) -> Self {
+    pub fn with(next_config: C, metadata: Option<Vec<u8>>) -> Self {
         StopSign {
             next_config,
             metadata,
@@ -84,7 +90,7 @@ pub type StorageResult<T> = Result<T, Box<dyn Error>>;
 
 /// The write operations of the storge implementation.
 #[derive(Debug)]
-pub enum StorageOp<T: Entry> {
+pub enum StorageOp<T: Entry, C: ClusterConfigTrait> {
     /// Appends an entry to the end of the log.
     AppendEntry(T),
     /// Appends entries to the end of the log.
@@ -102,22 +108,23 @@ pub enum StorageOp<T: Entry> {
     /// Removes elements up to the given idx from storage.
     Trim(usize),
     /// Sets the StopSign used for reconfiguration.
-    SetStopsign(Option<StopSign>),
+    SetStopsign(Option<StopSign<C>>),
     /// Sets the snapshot.
     SetSnapshot(Option<T::Snapshot>),
 }
 
 /// Trait for implementing the storage backend of Sequence Paxos.
-pub trait Storage<T>
+pub trait Storage<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
     /// **Atomically** perform all storage operations in order.
     /// For correctness, the operations must be atomic i.e., either all operations are performed
     /// successfully or all get rolled back. If the `StorageResult` returns as `Err`, the
     /// operations are assumed to have been rolled back to the previous state before this function
     /// call.
-    fn write_atomically(&mut self, ops: Vec<StorageOp<T>>) -> StorageResult<()>;
+    fn write_atomically(&mut self, ops: Vec<StorageOp<T, C>>) -> StorageResult<()>;
 
     /// Appends an entry to the end of the log.
     fn append_entry(&mut self, entry: T) -> StorageResult<()>;
@@ -159,10 +166,10 @@ where
     fn get_promise(&self) -> StorageResult<Option<Ballot>>;
 
     /// Sets the StopSign used for reconfiguration.
-    fn set_stopsign(&mut self, s: Option<StopSign>) -> StorageResult<()>;
+    fn set_stopsign(&mut self, s: Option<StopSign<C>>) -> StorageResult<()>;
 
     /// Returns the stored StopSign, returns `None` if no StopSign has been stored.
-    fn get_stopsign(&self) -> StorageResult<Option<StopSign>>;
+    fn get_stopsign(&self) -> StorageResult<Option<StopSign<C>>>;
 
     /// Removes elements up to the given [`idx`] from storage.
     fn trim(&mut self, idx: usize) -> StorageResult<()>;

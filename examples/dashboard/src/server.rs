@@ -3,7 +3,7 @@ use crate::{
     util::{OUTGOING_MESSAGE_PERIOD, TICK_PERIOD, UI_TICK_PERIOD},
     OmniPaxosLog,
 };
-use omnipaxos::{messages::Message, util::NodeId};
+use omnipaxos::{messages::Message, util::NodeId, ClusterConfig};
 use omnipaxos_ui::OmniPaxosUI;
 use std::{
     collections::HashMap,
@@ -14,9 +14,9 @@ use tokio::{sync::mpsc, time};
 pub struct OmniPaxosServer {
     pub omni_paxos_ui: OmniPaxosUI,
     pub omni_paxos: Arc<Mutex<OmniPaxosLog>>,
-    pub incoming: mpsc::Receiver<Message<LogEntry>>,
-    pub outgoing: HashMap<NodeId, mpsc::Sender<Message<LogEntry>>>,
-    pub message_buffer: Vec<Message<LogEntry>>,
+    pub incoming: mpsc::Receiver<Message<LogEntry, ClusterConfig>>,
+    pub outgoing: HashMap<NodeId, mpsc::Sender<Message<LogEntry, ClusterConfig>>>,
+    pub message_buffer: Vec<Message<LogEntry, ClusterConfig>>,
 }
 
 impl OmniPaxosServer {

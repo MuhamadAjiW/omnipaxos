@@ -1,5 +1,5 @@
-use crate::utils::omnireplica::OmniPaxosComponent;
-use crate::utils::{create_proposals, TestConfig, TestSystem, Value};
+use crate::ec::utils::omnireplica::OmniPaxosComponentEC;
+use crate::ec::utils::{create_proposals, TestConfigEC, TestECEntry, TestSystemEC};
 use kompact::prelude::{promise, Ask, Component, FutureCollection};
 use omnipaxos::util::LogEntry;
 use serial_test::serial;
@@ -13,9 +13,9 @@ const TRIM_INDEX_INCREMENT: usize = 10;
 #[test]
 #[serial]
 fn ec_trim_test() {
-    let cfg = TestConfig::load("trim_test").expect("Test config loaded");
+    let cfg = TestConfigEC::load("trim_test").expect("Test config loaded");
     assert_ne!(cfg.trim_idx, 0, "trim_idx must be greater than 0");
-    let mut sys = TestSystem::with(cfg);
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
     let elected_pid = sys.get_elected_leader(1, cfg.wait_timeout);
     let elected_leader = sys.nodes.get(&elected_pid).unwrap();
@@ -70,13 +70,13 @@ fn ec_trim_test() {
 #[test]
 #[serial]
 fn ec_double_trim_test() {
-    let cfg = TestConfig::load("trim_test").expect("Test config loaded");
+    let cfg = TestConfigEC::load("trim_test").expect("Test config loaded");
     assert_ne!(cfg.trim_idx, 0, "trim_idx must be greater than 0");
     assert!(
         cfg.num_proposals as usize >= cfg.trim_idx + TRIM_INDEX_INCREMENT,
         "Not enough proposals to test double trim"
     );
-    let mut sys = TestSystem::with(cfg);
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
     let elected_pid = sys.get_elected_leader(1, cfg.wait_timeout);
     let elected_leader = sys.nodes.get(&elected_pid).unwrap();
@@ -131,7 +131,11 @@ fn ec_double_trim_test() {
     };
 }
 
-fn check_trim(vec_proposals: &[Value], trim_idx: usize, node: Arc<Component<OmniPaxosComponent>>) {
+fn check_trim(
+    vec_proposals: &[TestECEntry],
+    trim_idx: usize,
+    node: Arc<Component<OmniPaxosComponentEC>>,
+) {
     let num_proposals = vec_proposals.len();
     node.on_definition(|x| {
         let op = &x.paxos;

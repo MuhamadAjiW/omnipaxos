@@ -25,20 +25,20 @@ pub mod leader;
 pub(crate) struct SequencePaxos<T, B>
 where
     T: Entry,
-    B: Storage<T>,
+    B: Storage<T, ClusterConfig>,
 {
-    pub(crate) internal_storage: InternalStorage<B, T>,
+    pub(crate) internal_storage: InternalStorage<B, T, ClusterConfig>,
     pid: NodeId,
     peers: Vec<NodeId>, // excluding self pid
     state: (Role, Phase),
     buffered_proposals: Vec<T>,
-    buffered_stopsign: Option<StopSign>,
-    outgoing: Vec<Message<T>>,
-    leader_state: LeaderState<T>,
+    buffered_stopsign: Option<StopSign<ClusterConfig>>,
+    outgoing: Vec<Message<T, ClusterConfig>>,
+    leader_state: LeaderState<T, ClusterConfig>,
     latest_accepted_meta: Option<(Ballot, usize)>,
     // Keeps track of sequence of accepts from leader where AcceptSync = 1
     current_seq_num: SequenceNumber,
-    cached_promise_message: Option<Promise<T>>,
+    cached_promise_message: Option<Promise<T, ClusterConfig>>,
     #[cfg(feature = "logging")]
     logger: Logger,
 }
@@ -46,7 +46,7 @@ where
 impl<T, B> SequencePaxos<T, B>
 where
     T: Entry,
-    B: Storage<T>,
+    B: Storage<T, ClusterConfig>,
 {
     /*** User functions ***/
     /// Creates a Sequence Paxos replica.
@@ -93,7 +93,7 @@ where
             buffered_proposals: vec![],
             buffered_stopsign: None,
             outgoing,
-            leader_state: LeaderState::<T>::with(leader, max_pid, quorum),
+            leader_state: LeaderState::<T, ClusterConfig>::with(leader, max_pid, quorum),
             latest_accepted_meta: None,
             current_seq_num: SequenceNumber::default(),
             cached_promise_message: None,
@@ -248,7 +248,7 @@ where
     /// Moves the outgoing messages from this replica into the buffer. The messages should then be sent via the network implementation.
     /// If `buffer` is empty, it gets swapped with the internal message buffer. Otherwise, messages are appended to the buffer. This prevents messages from getting discarded.
     /// the buffer.
-    pub(crate) fn take_outgoing_msgs(&mut self, buffer: &mut Vec<Message<T>>) {
+    pub(crate) fn take_outgoing_msgs(&mut self, buffer: &mut Vec<Message<T, ClusterConfig>>) {
         if buffer.is_empty() {
             std::mem::swap(buffer, &mut self.outgoing);
         } else {
@@ -260,7 +260,7 @@ where
     }
 
     /// Handle an incoming message.
-    pub(crate) fn handle(&mut self, m: PaxosMessage<T>) {
+    pub(crate) fn handle(&mut self, m: PaxosMessage<T, ClusterConfig>) {
         match m.msg {
             PaxosMsg::PrepareReq(prepreq) => self.handle_preparereq(prepreq, m.from),
             PaxosMsg::Prepare(prep) => self.handle_prepare(prep, m.from),
@@ -282,7 +282,7 @@ where
     }
 
     /// Returns whether this Sequence Paxos has been reconfigured
-    pub(crate) fn is_reconfigured(&self) -> Option<StopSign> {
+    pub(crate) fn is_reconfigured(&self) -> Option<StopSign<ClusterConfig>> {
         match self.internal_storage.get_stopsign() {
             Some(ss) if self.internal_storage.stopsign_is_decided() => Some(ss),
             _ => None,
@@ -359,7 +359,7 @@ where
         }
     }
 
-    pub(crate) fn get_leader_state(&self) -> &LeaderState<T> {
+    pub(crate) fn get_leader_state(&self) -> &LeaderState<T, ClusterConfig> {
         &self.leader_state
     }
 
@@ -378,7 +378,7 @@ where
         }
     }
 
-    pub(crate) fn forward_stopsign(&mut self, ss: StopSign) {
+    pub(crate) fn forward_stopsign(&mut self, ss: StopSign<ClusterConfig>) {
         let leader = self.get_current_leader();
         if leader > 0 && self.pid != leader {
             #[cfg(feature = "logging")]
@@ -401,7 +401,7 @@ where
         &self,
         common_prefix_idx: usize,
         other_logs_decided_idx: usize,
-    ) -> LogSync<T> {
+    ) -> LogSync<T, ClusterConfig> {
         let decided_idx = self.internal_storage.get_decided_idx();
         let (decided_snapshot, suffix, sync_idx) =
             if T::Snapshot::use_snapshots() && decided_idx > common_prefix_idx {

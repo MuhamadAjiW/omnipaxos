@@ -10,9 +10,9 @@
 ///     3. Schedule a failure in the mock-broken storage.
 ///     4. Give it the test message and catch the ensuing panic.
 ///     5. Check if the storage is in a consistent state.
-use crate::ec::utils::{TestECEntry, TestECEntrySnapshot};
-use crate::utils::StorageType;
-use crate::utils::{BrokenStorageConfig, TestConfig};
+use crate::ec::utils::{
+    BrokenStorageConfig, StorageTypeEC, TestConfigEC, TestECEntry, TestECEntrySnapshot,
+};
 #[cfg(not(feature = "unicache"))]
 use omnipaxos::messages::sequence_paxos::{AcceptDecide, Compaction};
 #[cfg(feature = "unicache")]
@@ -45,11 +45,11 @@ type BrokenStore = Arc<Mutex<BrokenStorageConfig>>;
 fn basic_setup() -> (
     MemoryStore,
     BrokenStore,
-    OmniPaxosEC<TestECEntry, StorageType<TestECEntry>>,
+    OmniPaxosEC<TestECEntry, StorageTypeEC<TestECEntry>>,
 ) {
-    let cfg = TestConfig::load("atomic_storage_test").expect("Test config loaded");
-    let storage = StorageType::with(cfg.storage_type, "");
-    let (mem_storage, storage_conf) = if let StorageType::Broken(ref s, ref c) = storage {
+    let cfg = TestConfigEC::load("atomic_storage_test").expect("Test config loaded");
+    let storage = StorageTypeEC::with(cfg.storage_type, "");
+    let (mem_storage, storage_conf) = if let StorageTypeEC::Broken(ref s, ref c) = storage {
         (s.clone(), c.clone())
     } else {
         panic!("using wrong storage for atomic_storage_test")
@@ -69,7 +69,7 @@ fn basic_setup() -> (
 fn _setup_leader() -> (
     MemoryStore,
     BrokenStore,
-    OmniPaxosEC<TestECEntry, StorageType<TestECEntry>>,
+    OmniPaxosEC<TestECEntry, StorageTypeEC<TestECEntry>>,
 ) {
     let (mem_storage, storage_conf, mut op) = setup_follower();
     let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();
@@ -145,7 +145,7 @@ fn _setup_leader() -> (
 fn setup_follower() -> (
     MemoryStore,
     BrokenStore,
-    OmniPaxosEC<TestECEntry, StorageType<TestECEntry>>,
+    OmniPaxosEC<TestECEntry, StorageTypeEC<TestECEntry>>,
 ) {
     let (mem_storage, storage_conf, mut op) = basic_setup();
     let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();

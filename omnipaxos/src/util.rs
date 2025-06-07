@@ -1,3 +1,5 @@
+use crate::storage::ClusterConfigTrait;
+
 use super::{
     ballot_leader_election::Ballot,
     messages::sequence_paxos::Promise,
@@ -8,9 +10,10 @@ use std::{cmp::Ordering, fmt::Debug, marker::PhantomData};
 
 /// Struct used to help another server synchronize their log with the current state of our own log.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LogSync<T>
+pub struct LogSync<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
     /// The decided snapshot.
     pub decided_snapshot: Option<SnapshotType<T>>,
@@ -19,7 +22,7 @@ where
     /// The index of the log where the entries from `suffix` should be applied at (also the compacted idx of `decided_snapshot` if it exists).
     pub sync_idx: usize,
     /// The accepted StopSign.
-    pub stopsign: Option<StopSign>,
+    pub stopsign: Option<StopSign<C>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -69,9 +72,10 @@ enum PromiseState {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct LeaderState<T>
+pub(crate) struct LeaderState<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
     pub n_leader: Ballot,
     promises_meta: Vec<PromiseState>,
@@ -79,7 +83,7 @@ where
     follower_seq_nums: Vec<SequenceNumber>,
     pub accepted_indexes: Vec<usize>,
     max_promise_meta: PromiseMetaData,
-    max_promise_sync: Option<LogSync<T>>,
+    max_promise_sync: Option<LogSync<T, C>>,
     latest_accept_meta: Vec<Option<(Ballot, usize)>>, //  index in outgoing
     pub max_pid: usize,
     // The number of promises needed in the prepare phase to become synced and
@@ -87,9 +91,10 @@ where
     pub quorum: Quorum,
 }
 
-impl<T> LeaderState<T>
+impl<T, C> LeaderState<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
     pub fn with(n_leader: Ballot, max_pid: usize, quorum: Quorum) -> Self {
         Self {
@@ -126,7 +131,7 @@ where
         self.follower_seq_nums[Self::pid_to_idx(pid)]
     }
 
-    pub fn set_promise(&mut self, prom: Promise<T>, from: NodeId, check_max_prom: bool) -> bool {
+    pub fn set_promise(&mut self, prom: Promise<T, C>, from: NodeId, check_max_prom: bool) -> bool {
         let promise_meta = PromiseMetaData {
             n_accepted: prom.n_accepted,
             accepted_idx: prom.accepted_idx,
@@ -155,7 +160,7 @@ where
         self.promises_meta[Self::pid_to_idx(pid)] = PromiseState::PromisedHigher;
     }
 
-    pub fn take_max_promise_sync(&mut self) -> Option<LogSync<T>> {
+    pub fn take_max_promise_sync(&mut self) -> Option<LogSync<T, C>> {
         std::mem::take(&mut self.max_promise_sync)
     }
 
@@ -259,9 +264,10 @@ where
 
 /// The entry read in the log.
 #[derive(Debug, Clone)]
-pub enum LogEntry<T>
+pub enum LogEntry<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
     /// The entry is decided.
     Decided(T),
@@ -273,12 +279,13 @@ where
     Snapshotted(SnapshottedEntry<T>),
     /// This Sequence Paxos instance has been stopped for reconfiguration. The accompanying bool
     /// indicates whether the reconfiguration has been decided or not. If it is `true`, then the OmniPaxos instance for the new configuration can be started.
-    StopSign(StopSign, bool),
+    StopSign(StopSign<C>, bool),
 }
 
-impl<T: PartialEq + Entry> PartialEq for LogEntry<T>
+impl<T: PartialEq + Entry, C> PartialEq for LogEntry<T, C>
 where
     <T as Entry>::Snapshot: PartialEq,
+    C: ClusterConfigTrait,
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -294,10 +301,13 @@ where
 
 /// Convenience struct for checking if a certain index exists, is compacted or is a StopSign.
 #[derive(Debug, Clone)]
-pub(crate) enum IndexEntry {
+pub(crate) enum IndexEntry<C>
+where
+    C: ClusterConfigTrait,
+{
     Entry,
     Compacted,
-    StopSign(StopSign),
+    StopSign(StopSign<C>),
 }
 
 #[allow(missing_docs)]
@@ -469,7 +479,7 @@ pub(crate) struct AcceptedMetaData<T: Entry> {
 #[cfg(test)]
 mod tests {
     use super::*; // Import functions and types from this module
-    use crate::storage::NoSnapshot;
+    use crate::{storage::NoSnapshot, ClusterConfig};
     #[test]
     fn preparable_peers_test() {
         type Value = ();
@@ -482,7 +492,7 @@ mod tests {
         let quorum = Quorum::Majority(2);
         let max_pid = 8;
         let leader_state =
-            LeaderState::<Value>::with(Ballot::with(1, 1, 1, max_pid), max_pid as usize, quorum);
+            LeaderState::<Value, ClusterConfig>::with(Ballot::with(1, 1, 1, max_pid), max_pid as usize, quorum);
         let prep_peers = leader_state.get_preparable_peers(&nodes);
         assert_eq!(prep_peers, nodes);
 
@@ -490,7 +500,7 @@ mod tests {
         let quorum = Quorum::Majority(3);
         let max_pid = 100;
         let leader_state =
-            LeaderState::<Value>::with(Ballot::with(1, 1, 1, max_pid), max_pid as usize, quorum);
+            LeaderState::<Value, ClusterConfig>::with(Ballot::with(1, 1, 1, max_pid), max_pid as usize, quorum);
         let prep_peers = leader_state.get_preparable_peers(&nodes);
         assert_eq!(prep_peers, nodes);
     }

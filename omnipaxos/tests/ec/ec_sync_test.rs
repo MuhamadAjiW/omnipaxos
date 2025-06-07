@@ -1,20 +1,20 @@
-use crate::utils::STOPSIGN_ID;
-use crate::utils::{
+use crate::ec::utils::STOPSIGN_ID;
+use crate::ec::utils::{
     verification::{verify_log, verify_stopsign},
-    TestConfig, TestSystem, Value,
+    TestConfigEC, TestECEntry, TestSystemEC,
 };
 use kompact::prelude::{promise, Ask, FutureCollection};
-use omnipaxos::{storage::StopSign, util::NodeId, ClusterConfig};
+use omnipaxos::{storage::StopSign, util::NodeId, ClusterConfigEC};
 use serial_test::serial;
 
 /// The state of the leader's and follower's log at the time of a sync
 #[derive(Default)]
 struct SyncTest {
-    leaders_log: Vec<Value>,
+    leaders_log: Vec<TestECEntry>,
     leaders_dec_idx: usize,
     leaders_compacted_idx: Option<usize>,
     leaders_ss: Option<StopSign>,
-    followers_log: Vec<Value>,
+    followers_log: Vec<TestECEntry>,
     followers_dec_idx: usize,
     followers_compacted_idx: Option<usize>,
 }
@@ -28,19 +28,19 @@ fn ec_sync_full_test() {
     // Define leader's log
     let leaders_log = [1, 2, 3, 4, 5, 10, 11, 12]
         .into_iter()
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
     let leaders_dec_idx = 5;
     let leaders_compacted_idx = 2;
-    let cluster_config = ClusterConfig::default();
-    let mut leaders_ss = StopSign::with(cluster_config, None);
+    let cluster_config = ClusterConfigEC::default();
+    let mut leaders_ss = StopSign::with(cluster_config.into(), None);
     leaders_ss.next_config.configuration_id = 2;
     leaders_ss.next_config.nodes = vec![1, 2, 3];
 
     // Define follower's log
     let followers_log = [1, 2, 3, 6, 7, 8, 9]
         .into_iter()
-        .map(Value::with_id)
+        .map(TestECEntry::dummy)
         .collect();
     let followers_dec_idx = 3;
 
@@ -62,15 +62,21 @@ fn ec_sync_full_test() {
 #[serial]
 fn ec_sync_decided_ss_test() {
     // Define leader's log
-    let leaders_log = [1, 2, 3, 4, 5].into_iter().map(Value::with_id).collect();
+    let leaders_log = [1, 2, 3, 4, 5]
+        .into_iter()
+        .map(TestECEntry::dummy)
+        .collect();
     let leaders_dec_idx = 6;
-    let cluster_config = ClusterConfig::default();
-    let mut leaders_ss = StopSign::with(cluster_config, None);
+    let cluster_config = ClusterConfigEC::default();
+    let mut leaders_ss = StopSign::with(cluster_config.into(), None);
     leaders_ss.next_config.configuration_id = 2;
     leaders_ss.next_config.nodes = vec![1, 2, 3];
 
     // Define follower's log
-    let followers_log = [1, 2, 3, 6, 7].into_iter().map(Value::with_id).collect();
+    let followers_log = [1, 2, 3, 6, 7]
+        .into_iter()
+        .map(TestECEntry::dummy)
+        .collect();
     let followers_dec_idx = 3;
 
     let test = SyncTest {
@@ -90,8 +96,8 @@ fn ec_sync_decided_ss_test() {
 fn ec_sync_only_stopsign_test() {
     // Define leader's log
     let leaders_dec_idx = 1;
-    let cluster_config = ClusterConfig::default();
-    let mut leaders_ss = StopSign::with(cluster_config, None);
+    let cluster_config = ClusterConfigEC::default();
+    let mut leaders_ss = StopSign::with(cluster_config.into(), None);
     leaders_ss.next_config.configuration_id = 2;
     leaders_ss.next_config.nodes = vec![1, 2, 3];
 
@@ -113,7 +119,7 @@ fn ec_sync_only_stopsign_test() {
 #[serial]
 fn ec_sync_only_snapshot_test() {
     // Define leader's log
-    let leaders_log: Vec<Value> = [1, 2, 3].into_iter().map(Value::with_id).collect();
+    let leaders_log: Vec<TestECEntry> = [1, 2, 3].into_iter().map(TestECEntry::dummy).collect();
     let leaders_dec_idx = 3;
     let leaders_compacted_idx = 3;
 
@@ -136,11 +142,14 @@ fn ec_sync_only_snapshot_test() {
 #[serial]
 fn ec_sync_follower_snapshot_test() {
     // Define leader's log
-    let leaders_log = [1, 2, 3, 4, 5].into_iter().map(Value::with_id).collect();
+    let leaders_log = [1, 2, 3, 4, 5]
+        .into_iter()
+        .map(TestECEntry::dummy)
+        .collect();
     let leaders_dec_idx = 5;
 
     // Define follower's log
-    let followers_log = [1, 2, 3, 4].into_iter().map(Value::with_id).collect();
+    let followers_log = [1, 2, 3, 4].into_iter().map(TestECEntry::dummy).collect();
     let followers_dec_idx = 4;
     let followers_compacted_idx = 3;
 
@@ -155,13 +164,13 @@ fn ec_sync_follower_snapshot_test() {
     sync_test(test);
 }
 
-/// Creates a TestSystem cluster which sets up a scenario such that a follower is
+/// Creates a TestSystemEC cluster which sets up a scenario such that a follower is
 /// disconnected from the cluster, is reconnected, and is synced by the leader. The state of the
 /// leader's and follower's log at the time of the sync is given by the SyncTest argument.
 fn sync_test(test: SyncTest) {
     // Start a Kompact system
-    let cfg = TestConfig::load("sync_test").expect("Test config couldn't be loaded");
-    let sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("sync_test").expect("Test config couldn't be loaded");
+    let sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
     let (followers_decided, followers_accepted) =
@@ -251,7 +260,7 @@ fn sync_test(test: SyncTest) {
     if test.leaders_ss.is_some() {
         let (kprom, kfuture) = promise::<()>();
         follower.on_definition(|x| {
-            x.insert_decided_future(Ask::new(kprom, Value::with_id(STOPSIGN_ID)));
+            x.insert_decided_future(Ask::new(kprom, TestECEntry::dummy(STOPSIGN_ID)));
         });
         proposal_futures.push(kfuture);
     }

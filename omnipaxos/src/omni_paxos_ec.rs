@@ -69,7 +69,7 @@ impl OmniPaxosECConfig {
     pub fn build<T, B>(self, storage: B) -> Result<OmniPaxosEC<T, B>, ConfigError>
     where
         T: ECEntry,
-        B: Storage<T>,
+        B: Storage<T, ClusterConfigEC>,
     {
         self.validate()?;
         // Use stored ballot as initial BLE leader
@@ -155,7 +155,7 @@ impl ClusterConfigEC {
     ) -> Result<OmniPaxosEC<T, B>, ConfigError>
     where
         T: ECEntry,
-        B: Storage<T>,
+        B: Storage<T, ClusterConfigEC>,
     {
         let op_config = OmniPaxosECConfig {
             cluster_config: self,
@@ -262,7 +262,7 @@ impl Default for ServerConfigEC {
 pub struct OmniPaxosEC<T, B>
 where
     T: ECEntry,
-    B: Storage<T>,
+    B: Storage<T, ClusterConfigEC>,
 {
     seq_paxos: SequencePaxosEC<T, B>,
     ble: BallotLeaderElection,
@@ -274,7 +274,7 @@ where
 impl<T, B> OmniPaxosEC<T, B>
 where
     T: ECEntry,
-    B: Storage<T>,
+    B: Storage<T, ClusterConfigEC>,
 {
     /// Initiates the trim process.
     /// # Arguments
@@ -327,13 +327,13 @@ where
     }
 
     /// Moves outgoing messages from this server into the buffer. The messages should then be sent via the network implementation.
-    pub fn take_outgoing_messages(&mut self, buffer: &mut Vec<Message<T>>) {
+    pub fn take_outgoing_messages(&mut self, buffer: &mut Vec<Message<T, ClusterConfigEC>>) {
         self.seq_paxos.take_outgoing_msgs(buffer);
         buffer.extend(self.ble.outgoing_mut().drain(..).map(|b| Message::BLE(b)));
     }
 
     /// Read entry at index `idx` in the log. Returns `None` if `idx` is out of bounds.
-    pub fn read(&self, idx: usize) -> Option<LogEntry<T>> {
+    pub fn read(&self, idx: usize) -> Option<LogEntry<T, ClusterConfigEC>> {
         match self
             .seq_paxos
             .internal_storage
@@ -346,7 +346,7 @@ where
     }
 
     /// Read entries in the range `r` in the log. Returns `None` if `r` is out of bounds.
-    pub fn read_entries<R>(&self, r: R) -> Option<Vec<LogEntry<T>>>
+    pub fn read_entries<R>(&self, r: R) -> Option<Vec<LogEntry<T, ClusterConfigEC>>>
     where
         R: RangeBounds<usize>,
     {
@@ -357,7 +357,10 @@ where
     }
 
     /// Read all decided entries starting at `from_idx` (inclusive) in the log. Returns `None` if `from_idx` is out of bounds.
-    pub fn read_decided_suffix(&self, from_idx: usize) -> Option<Vec<LogEntry<T>>> {
+    pub fn read_decided_suffix(
+        &self,
+        from_idx: usize,
+    ) -> Option<Vec<LogEntry<T, ClusterConfigEC>>> {
         self.seq_paxos
             .internal_storage
             .read_decided_suffix(from_idx)
@@ -365,7 +368,7 @@ where
     }
 
     /// Handle an incoming message
-    pub fn handle_incoming(&mut self, m: Message<T>) {
+    pub fn handle_incoming(&mut self, m: Message<T, ClusterConfigEC>) {
         match m {
             Message::SequencePaxos(p) => self.seq_paxos.handle(p),
             Message::BLE(b) => self.ble.handle(b),
@@ -373,7 +376,7 @@ where
     }
 
     /// Returns whether this Sequence Paxos has been reconfigured
-    pub fn is_reconfigured(&self) -> Option<StopSign> {
+    pub fn is_reconfigured(&self) -> Option<StopSign<ClusterConfigEC>> {
         self.seq_paxos.is_reconfigured()
     }
 

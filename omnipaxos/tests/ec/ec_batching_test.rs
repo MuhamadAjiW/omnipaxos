@@ -1,4 +1,4 @@
-use crate::utils::{create_proposals, TestConfig, TestSystem};
+use crate::ec::utils::{create_proposals, TestConfigEC, TestSystemEC};
 use kompact::prelude::{promise, Ask, FutureCollection};
 use omnipaxos::ballot_leader_election::Ballot;
 use serial_test::serial;
@@ -10,8 +10,8 @@ use std::{thread, time::Duration};
 fn ec_batching_test() {
     let wait_time_between_propose = Duration::from_millis(2);
 
-    let cfg = TestConfig::load("batching_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("batching_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
     let first_node = sys.nodes.get(&1).unwrap();
     let (kprom, kfuture) = promise::<Ballot>();
     first_node.on_definition(|x| x.election_futures.push(Ask::new(kprom, ())));

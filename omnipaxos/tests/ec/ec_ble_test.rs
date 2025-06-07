@@ -1,4 +1,4 @@
-use crate::utils::{TestConfig, TestSystem};
+use crate::ec::utils::{TestConfigEC, TestSystemEC};
 use serial_test::serial;
 use std::thread;
 
@@ -9,8 +9,8 @@ use std::thread;
 #[test]
 #[serial]
 fn ec_ble_test() {
-    let cfg = TestConfig::load("ble_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("ble_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
     let mut prev_leader = 0;

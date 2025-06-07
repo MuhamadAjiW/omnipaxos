@@ -1,5 +1,5 @@
-use crate::utils::{create_proposals, TestConfig, TestSystem, Value};
-use crate::utils::{omnireplica::OmniPaxosComponent, ValueSnapshot};
+use crate::ec::utils::{create_proposals, TestConfigEC, TestECEntry, TestSystemEC};
+use crate::ec::utils::{omnireplica::OmniPaxosComponentEC, TestECEntrySnapshot};
 use kompact::prelude::{promise, Ask, Component, FutureCollection};
 use omnipaxos::{storage::Snapshot, util::LogEntry};
 use serial_test::serial;
@@ -13,8 +13,8 @@ const SNAPSHOT_INDEX_INCREMENT: usize = 10;
 #[test]
 #[serial]
 fn ec_snapshot_test() {
-    let cfg = TestConfig::load("trim_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("trim_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
     let elected_pid = sys.get_elected_leader(1, cfg.wait_timeout);
     let elected_leader = sys.nodes.get(&elected_pid).unwrap();
@@ -65,8 +65,8 @@ fn ec_snapshot_test() {
 #[test]
 #[serial]
 fn ec_double_snapshot_test() {
-    let cfg = TestConfig::load("trim_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("trim_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
     let elected_pid = sys.get_elected_leader(1, cfg.wait_timeout);
     let elected_leader = sys.nodes.get(&elected_pid).unwrap();
@@ -124,11 +124,11 @@ fn ec_double_snapshot_test() {
 }
 
 fn check_snapshot(
-    vec_proposals: &[Value],
+    vec_proposals: &[TestECEntry],
     snapshot_idx: usize,
-    node: Arc<Component<OmniPaxosComponent>>,
+    node: Arc<Component<OmniPaxosComponentEC>>,
 ) {
-    let exp_snapshot = ValueSnapshot::create(&vec_proposals[0..snapshot_idx]);
+    let exp_snapshot = TestECEntrySnapshot::create(&vec_proposals[0..snapshot_idx]);
     let num_proposals = vec_proposals.len();
     node.on_definition(|x| {
         let op = &x.paxos;
@@ -138,7 +138,7 @@ fn check_snapshot(
                     if s.snapshot == exp_snapshot && s.trimmed_idx == snapshot_idx => {}
                 e => panic!(
                     "Unexpected entry at {}. Should be snapshot with trimmed index {} and latest value: {:?}, but got {:?}",
-                    snapshotted_idx, snapshot_idx, exp_snapshot.latest_value, e
+                    snapshotted_idx, snapshot_idx, exp_snapshot.latest_entry, e
                 ),
             }
         }

@@ -7,7 +7,7 @@ use crate::util::{MessageStatus, WRITE_ERROR_MSG};
 impl<T, B> SequencePaxosEC<T, B>
 where
     T: ECEntry,
-    B: Storage<T>,
+    B: Storage<T, ClusterConfigEC>,
 {
     /*** Follower ***/
     pub(crate) fn handle_prepare(&mut self, prep: Prepare, from: NodeId) {
@@ -50,7 +50,11 @@ where
         }
     }
 
-    pub(crate) fn handle_acceptsync(&mut self, accsync: AcceptSync<T>, from: NodeId) {
+    pub(crate) fn handle_acceptsync(
+        &mut self,
+        accsync: AcceptSync<T, ClusterConfigEC>,
+        from: NodeId,
+    ) {
         if self.check_valid_ballot(accsync.n) && self.state == (RoleEC::Follower, PhaseEC::Prepare)
         {
             self.cached_promise_message = None;
@@ -110,7 +114,7 @@ where
         }
     }
 
-    pub(crate) fn handle_accept_stopsign(&mut self, acc_ss: AcceptStopSign) {
+    pub(crate) fn handle_accept_stopsign(&mut self, acc_ss: AcceptStopSign<ClusterConfigEC>) {
         if self.check_valid_ballot(acc_ss.n)
             && self.state == (RoleEC::Follower, PhaseEC::Accept)
             && self.handle_sequence_num(acc_ss.seq_num, acc_ss.n.pid) == MessageStatus::Expected

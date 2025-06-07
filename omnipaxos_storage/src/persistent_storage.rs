@@ -1,6 +1,6 @@
 use omnipaxos::{
     ballot_leader_election::Ballot,
-    storage::{Entry, StopSign, Storage, StorageOp, StorageResult},
+    storage::{ClusterConfigTrait, Entry, StopSign, Storage, StorageOp, StorageResult},
 };
 use rocksdb::{ColumnFamilyDescriptor, ColumnFamilyRef, Options, WriteBatchWithTransaction, DB};
 use serde::{Deserialize, Serialize};
@@ -96,9 +96,10 @@ impl Default for PersistentStorageConfig {
 /// A persistent storage implementation, lets sequence paxos write the log
 /// and current state to disk. Log entries are serialized and de-serialized
 /// into slice of bytes when read or written from the log.
-pub struct PersistentStorage<T>
+pub struct PersistentStorage<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
     /// Local RocksDB key-value store
     db: DB,
@@ -109,12 +110,15 @@ where
     next_log_key: usize,
     /// A placeholder for the T: Entry
     t: PhantomData<T>,
+    /// A placeholder for the C: ClusterConfigTrait
+    c: PhantomData<C>,
 }
 
-impl<T: Entry> PersistentStorage<T>
+impl<T: Entry, C> PersistentStorage<T, C>
 where
     T: Entry + Serialize + for<'a> Deserialize<'a>,
     T::Snapshot: Serialize + for<'a> Deserialize<'a>,
+    C: ClusterConfigTrait,
 {
     /// Creates or opens an existing storage
     pub fn open(storage_config: PersistentStorageConfig) -> Self {
@@ -161,6 +165,7 @@ where
             write_batch: WriteBatchWithTransaction::<false>::default(),
             next_log_key,
             t: PhantomData,
+            c: PhantomData,
         }
     }
 
@@ -247,7 +252,7 @@ where
         Ok(())
     }
 
-    fn batch_set_stopsign(&mut self, ss: Option<StopSign>) -> StorageResult<()> {
+    fn batch_set_stopsign(&mut self, ss: Option<StopSign<C>>) -> StorageResult<()> {
         let stopsign = bincode::serialize(&ss)?;
         self.write_batch.put(STOPSIGN, stopsign);
         Ok(())
@@ -270,12 +275,13 @@ impl std::fmt::Display for ErrHelper {
     }
 }
 
-impl<T> Storage<T> for PersistentStorage<T>
+impl<T, C> Storage<T, C> for PersistentStorage<T, C>
 where
     T: Entry + Serialize + for<'a> Deserialize<'a>,
     T::Snapshot: Serialize + for<'a> Deserialize<'a>,
+    C: ClusterConfigTrait + Serialize + for<'a> Deserialize<'a>,
 {
-    fn write_atomically(&mut self, ops: Vec<StorageOp<T>>) -> StorageResult<()> {
+    fn write_atomically(&mut self, ops: Vec<StorageOp<T, C>>) -> StorageResult<()> {
         for op in ops {
             match op {
                 StorageOp::AppendEntry(entry) => self.batch_append_entry(entry)?,
@@ -417,7 +423,7 @@ where
         Ok(())
     }
 
-    fn get_stopsign(&self) -> StorageResult<Option<StopSign>> {
+    fn get_stopsign(&self) -> StorageResult<Option<StopSign<C>>> {
         let stopsign = self.db.get_pinned(STOPSIGN)?;
         match stopsign {
             Some(ss_bytes) => Ok(bincode::deserialize(&ss_bytes)?),
@@ -425,7 +431,7 @@ where
         }
     }
 
-    fn set_stopsign(&mut self, s: Option<StopSign>) -> StorageResult<()> {
+    fn set_stopsign(&mut self, s: Option<StopSign<C>>) -> StorageResult<()> {
         let stopsign = bincode::serialize(&s)?;
         self.db.put(STOPSIGN, stopsign)?;
         Ok(())

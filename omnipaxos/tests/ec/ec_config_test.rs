@@ -1,6 +1,6 @@
 #![cfg(feature = "toml_config")]
-use crate::utils::Value;
-use omnipaxos::{util::FlexibleQuorum, OmniPaxosConfig};
+use crate::ec::utils::TestECEntry;
+use omnipaxos::{util::FlexibleQuorum, OmniPaxosECConfig};
 use omnipaxos_storage::memory_storage::MemoryStorage;
 use serial_test::serial;
 
@@ -10,7 +10,7 @@ use serial_test::serial;
 #[serial]
 fn ec_config_all_fields_test() {
     let file_path = "tests/config/node1.toml";
-    match OmniPaxosConfig::with_toml(file_path) {
+    match OmniPaxosECConfig::with_toml(file_path) {
         Err(e) => panic!("{e}"),
         Ok(config) => {
             assert_eq!(config.cluster_config.configuration_id, 1);
@@ -36,7 +36,9 @@ fn ec_config_all_fields_test() {
             assert_eq!(config.server_config.leader_priority, 2);
 
             // Make sure we pass asserts in build
-            config.build(MemoryStorage::<Value>::default()).unwrap();
+            config
+                .build(MemoryStorage::<TestECEntry>::default())
+                .unwrap();
         }
     }
 }

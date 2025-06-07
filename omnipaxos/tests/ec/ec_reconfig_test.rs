@@ -1,9 +1,9 @@
-use crate::utils::{create_proposals, STOPSIGN_ID};
-use crate::utils::{TestConfig, TestSystem, Value};
+use crate::ec::utils::{create_proposals, STOPSIGN_ID};
+use crate::ec::utils::{TestConfigEC, TestECEntry, TestSystemEC};
 use kompact::prelude::{promise, Ask};
 use omnipaxos::{
     util::{LogEntry, NodeId},
-    ClusterConfig,
+    ClusterConfigEC,
 };
 use serial_test::serial;
 
@@ -13,18 +13,19 @@ const SS_METADATA: u8 = 255;
 #[test]
 #[serial]
 fn ec_reconfig_test() {
-    let cfg = TestConfig::load("consensus_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("consensus_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
     sys.make_proposals(1, create_proposals(1, cfg.num_proposals), cfg.wait_timeout);
 
     let new_config_id = 2;
     let new_nodes: Vec<NodeId> = (cfg.num_nodes as NodeId..(cfg.num_nodes as NodeId + 3)).collect();
-    let new_config = ClusterConfig {
+    let new_config = ClusterConfigEC {
         configuration_id: new_config_id,
         nodes: new_nodes,
         flexible_quorum: None,
     };
+    let new_config_clone = new_config.clone();
     let metadata = Some(vec![SS_METADATA]);
 
     let first_node = sys.nodes.get(&1).unwrap();
@@ -33,7 +34,7 @@ fn ec_reconfig_test() {
         x.paxos
             .reconfigure(new_config.clone(), metadata.clone())
             .expect("Failed to reconfigure");
-        let stopsign_value = Value::with_id(STOPSIGN_ID);
+        let stopsign_value = TestECEntry::dummy(STOPSIGN_ID);
         x.insert_decided_future(Ask::new(kprom, stopsign_value));
         kfuture
     });
@@ -49,18 +50,17 @@ fn ec_reconfig_test() {
             .expect("Failed to read decided suffix");
         match decided.last().expect("Failed to read last decided entry") {
             LogEntry::StopSign(ss, decided) => {
-                assert_eq!(ss.next_config, new_config);
+                assert_eq!(ss.next_config, new_config.into());
                 assert_eq!(ss.metadata, metadata);
                 assert!(decided, "StopSign should be decided")
             }
             e => panic!("Last decided entry is not a StopSign: {:?}", e),
         }
     });
-
     let decided_nodes = sys.nodes.iter().fold(vec![], |mut x, (pid, paxos)| {
         let ss = paxos.on_definition(|x| x.paxos.is_reconfigured());
         if let Some(stop_sign) = ss {
-            assert_eq!(stop_sign.next_config, new_config);
+            assert_eq!(stop_sign.next_config, new_config_clone.clone().into());
             assert_eq!(stop_sign.metadata, metadata);
             x.push(pid);
         }
@@ -73,7 +73,7 @@ fn ec_reconfig_test() {
     let node = sys.nodes.get(pid).unwrap();
     node.on_definition(|x| {
         x.paxos
-            .append(Value::with_id(0))
+            .append(TestECEntry::dummy(0))
             .expect_err("Should not be able to propose after decided StopSign!")
     });
 

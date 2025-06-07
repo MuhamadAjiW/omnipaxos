@@ -4,7 +4,7 @@ use omnipaxos::{
     ballot_leader_election::Ballot,
     macros::*,
     messages::Message,
-    storage::{Storage, StorageResult},
+    storage::{Entry, Storage, StorageResult},
     util::{FlexibleQuorum, NodeId},
     ClusterConfigEC, OmniPaxosECConfig, ServerConfigEC,
 };
@@ -13,7 +13,7 @@ use omnipaxos::{
         ec_service::EntryFragment,
         log_entry::{ECEntry, OperationType},
     },
-    storage::{Entry, Snapshot},
+    storage::Snapshot,
 };
 use omnipaxos_storage::{
     memory_storage::MemoryStorage,
@@ -77,7 +77,7 @@ pub fn create_proposals(from: u64, to: u64) -> Vec<TestECEntry> {
 /// the configuration file `/tests/config/test.toml` using toml
 #[derive(Deserialize, Clone, Copy)]
 #[serde(default)]
-pub struct TestConfig {
+pub struct TestConfigEC {
     pub num_threads: usize,
     pub num_nodes: usize,
     #[serde(rename(deserialize = "wait_timeout_ms"))]
@@ -102,11 +102,11 @@ pub struct TestConfig {
     pub num_iterations: u64,
 }
 
-impl TestConfig {
-    pub fn load(name: &str) -> Result<TestConfig, Box<dyn Error>> {
+impl TestConfigEC {
+    pub fn load(name: &str) -> Result<TestConfigEC, Box<dyn Error>> {
         let config_file =
             fs::read_to_string("tests/config/test.toml").expect("Couldn't find config file.");
-        let mut configs: HashMap<String, TestConfig> = toml::from_str(&config_file)?;
+        let mut configs: HashMap<String, TestConfigEC> = toml::from_str(&config_file)?;
         let config = configs
             .remove(name)
             .unwrap_or_else(|| panic!("Couldnt find config for {}", name));
@@ -144,7 +144,7 @@ impl TestConfig {
     }
 }
 
-impl Default for TestConfig {
+impl Default for TestConfigEC {
     fn default() -> Self {
         Self {
             num_threads: 3,
@@ -207,9 +207,9 @@ impl BrokenStorageConfig {
 /// An enum which can either be a 'PersistentStorage' or 'MemoryStorage', the type depends on the
 /// 'StorageTypeSelector' enum. Used for testing purposes with SequencePaxos and BallotLeaderElection.
 /// Supports simulating storage failures in the `Broken` variant.
-pub enum StorageType<T>
+pub enum StorageTypeEC<T>
 where
-    T: Entry,
+    T: ECEntry,
 {
     Persistent(PersistentStorage<T>),
     Memory(MemoryStorage<T>),
@@ -221,19 +221,19 @@ where
     ),
 }
 
-impl<T> StorageType<T>
+impl<T> StorageTypeEC<T>
 where
-    T: Entry + Serialize + for<'a> Deserialize<'a>,
+    T: ECEntry + Serialize + for<'a> Deserialize<'a>,
     T::Snapshot: Serialize + for<'a> Deserialize<'a>,
 {
     pub fn with(storage_type: StorageTypeSelector, my_path: &str) -> Self {
         match storage_type {
             StorageTypeSelector::Persistent => {
                 let persist_conf = PersistentStorageConfig::with_path(my_path.to_string());
-                StorageType::Persistent(PersistentStorage::open(persist_conf))
+                StorageTypeEC::Persistent(PersistentStorage::open(persist_conf))
             }
-            StorageTypeSelector::Memory => StorageType::Memory(MemoryStorage::default()),
-            StorageTypeSelector::Broken(config) => StorageType::Broken(
+            StorageTypeSelector::Memory => StorageTypeEC::Memory(MemoryStorage::default()),
+            StorageTypeSelector::Broken(config) => StorageTypeEC::Broken(
                 Arc::new(Mutex::new(MemoryStorage::default())),
                 Arc::new(Mutex::new(config)),
             ),
@@ -241,13 +241,13 @@ where
     }
 
     pub fn with_memory(mem: MemoryStorage<T>) -> Self {
-        StorageType::Memory(mem)
+        StorageTypeEC::Memory(mem)
     }
 }
 
-impl<T> Storage<T> for StorageType<T>
+impl<T> Storage<T> for StorageTypeEC<T>
 where
-    T: Entry + Serialize + for<'a> Deserialize<'a>,
+    T: ECEntry + Serialize + for<'a> Deserialize<'a>,
     T::Snapshot: Serialize + for<'a> Deserialize<'a>,
 {
     fn write_atomically(
@@ -255,9 +255,9 @@ where
         ops: Vec<omnipaxos::storage::StorageOp<T>>,
     ) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.write_atomically(ops),
-            StorageType::Memory(mem_s) => mem_s.write_atomically(ops),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.write_atomically(ops),
+            StorageTypeEC::Memory(mem_s) => mem_s.write_atomically(ops),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 // NOTE: Can't properly test for atomicity since we can't tick between writes in batch.
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().write_atomically(ops)
@@ -267,9 +267,9 @@ where
 
     fn append_entry(&mut self, entry: T) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.append_entry(entry),
-            StorageType::Memory(mem_s) => mem_s.append_entry(entry),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.append_entry(entry),
+            StorageTypeEC::Memory(mem_s) => mem_s.append_entry(entry),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().append_entry(entry)
             }
@@ -278,9 +278,9 @@ where
 
     fn append_entries(&mut self, entries: Vec<T>) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.append_entries(entries),
-            StorageType::Memory(mem_s) => mem_s.append_entries(entries),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.append_entries(entries),
+            StorageTypeEC::Memory(mem_s) => mem_s.append_entries(entries),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().append_entries(entries)
             }
@@ -289,9 +289,9 @@ where
 
     fn append_on_prefix(&mut self, from_idx: usize, entries: Vec<T>) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.append_on_prefix(from_idx, entries),
-            StorageType::Memory(mem_s) => mem_s.append_on_prefix(from_idx, entries),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.append_on_prefix(from_idx, entries),
+            StorageTypeEC::Memory(mem_s) => mem_s.append_on_prefix(from_idx, entries),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().append_on_prefix(from_idx, entries)
             }
@@ -300,9 +300,9 @@ where
 
     fn set_promise(&mut self, n_prom: Ballot) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.set_promise(n_prom),
-            StorageType::Memory(mem_s) => mem_s.set_promise(n_prom),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.set_promise(n_prom),
+            StorageTypeEC::Memory(mem_s) => mem_s.set_promise(n_prom),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().set_promise(n_prom)
             }
@@ -311,9 +311,9 @@ where
 
     fn set_decided_idx(&mut self, ld: usize) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.set_decided_idx(ld),
-            StorageType::Memory(mem_s) => mem_s.set_decided_idx(ld),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.set_decided_idx(ld),
+            StorageTypeEC::Memory(mem_s) => mem_s.set_decided_idx(ld),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().set_decided_idx(ld)
             }
@@ -322,9 +322,9 @@ where
 
     fn get_decided_idx(&self) -> StorageResult<usize> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.get_decided_idx(),
-            StorageType::Memory(mem_s) => mem_s.get_decided_idx(),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.get_decided_idx(),
+            StorageTypeEC::Memory(mem_s) => mem_s.get_decided_idx(),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().get_decided_idx()
             }
@@ -333,9 +333,9 @@ where
 
     fn set_accepted_round(&mut self, na: Ballot) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.set_accepted_round(na),
-            StorageType::Memory(mem_s) => mem_s.set_accepted_round(na),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.set_accepted_round(na),
+            StorageTypeEC::Memory(mem_s) => mem_s.set_accepted_round(na),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().set_accepted_round(na)
             }
@@ -344,9 +344,9 @@ where
 
     fn get_accepted_round(&self) -> StorageResult<Option<Ballot>> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.get_accepted_round(),
-            StorageType::Memory(mem_s) => mem_s.get_accepted_round(),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.get_accepted_round(),
+            StorageTypeEC::Memory(mem_s) => mem_s.get_accepted_round(),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().get_accepted_round()
             }
@@ -355,9 +355,9 @@ where
 
     fn get_entries(&self, from: usize, to: usize) -> StorageResult<Vec<T>> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.get_entries(from, to),
-            StorageType::Memory(mem_s) => mem_s.get_entries(from, to),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.get_entries(from, to),
+            StorageTypeEC::Memory(mem_s) => mem_s.get_entries(from, to),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().get_entries(from, to)
             }
@@ -366,9 +366,9 @@ where
 
     fn get_log_len(&self) -> StorageResult<usize> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.get_log_len(),
-            StorageType::Memory(mem_s) => mem_s.get_log_len(),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.get_log_len(),
+            StorageTypeEC::Memory(mem_s) => mem_s.get_log_len(),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().get_log_len()
             }
@@ -377,9 +377,9 @@ where
 
     fn get_suffix(&self, from: usize) -> StorageResult<Vec<T>> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.get_suffix(from),
-            StorageType::Memory(mem_s) => mem_s.get_suffix(from),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.get_suffix(from),
+            StorageTypeEC::Memory(mem_s) => mem_s.get_suffix(from),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().get_suffix(from)
             }
@@ -388,9 +388,9 @@ where
 
     fn get_promise(&self) -> StorageResult<Option<Ballot>> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.get_promise(),
-            StorageType::Memory(mem_s) => mem_s.get_promise(),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.get_promise(),
+            StorageTypeEC::Memory(mem_s) => mem_s.get_promise(),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().get_promise()
             }
@@ -399,9 +399,9 @@ where
 
     fn set_stopsign(&mut self, s: Option<omnipaxos::storage::StopSign>) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.set_stopsign(s),
-            StorageType::Memory(mem_s) => mem_s.set_stopsign(s),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.set_stopsign(s),
+            StorageTypeEC::Memory(mem_s) => mem_s.set_stopsign(s),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().set_stopsign(s)
             }
@@ -410,9 +410,9 @@ where
 
     fn get_stopsign(&self) -> StorageResult<Option<omnipaxos::storage::StopSign>> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.get_stopsign(),
-            StorageType::Memory(mem_s) => mem_s.get_stopsign(),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.get_stopsign(),
+            StorageTypeEC::Memory(mem_s) => mem_s.get_stopsign(),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().get_stopsign()
             }
@@ -421,9 +421,9 @@ where
 
     fn trim(&mut self, idx: usize) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.trim(idx),
-            StorageType::Memory(mem_s) => mem_s.trim(idx),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.trim(idx),
+            StorageTypeEC::Memory(mem_s) => mem_s.trim(idx),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().trim(idx)
             }
@@ -432,9 +432,9 @@ where
 
     fn set_compacted_idx(&mut self, idx: usize) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.set_compacted_idx(idx),
-            StorageType::Memory(mem_s) => mem_s.set_compacted_idx(idx),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.set_compacted_idx(idx),
+            StorageTypeEC::Memory(mem_s) => mem_s.set_compacted_idx(idx),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().set_compacted_idx(idx)
             }
@@ -443,9 +443,9 @@ where
 
     fn get_compacted_idx(&self) -> StorageResult<usize> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.get_compacted_idx(),
-            StorageType::Memory(mem_s) => mem_s.get_compacted_idx(),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.get_compacted_idx(),
+            StorageTypeEC::Memory(mem_s) => mem_s.get_compacted_idx(),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().get_compacted_idx()
             }
@@ -454,9 +454,9 @@ where
 
     fn set_snapshot(&mut self, snapshot: Option<T::Snapshot>) -> StorageResult<()> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.set_snapshot(snapshot),
-            StorageType::Memory(mem_s) => mem_s.set_snapshot(snapshot),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.set_snapshot(snapshot),
+            StorageTypeEC::Memory(mem_s) => mem_s.set_snapshot(snapshot),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().set_snapshot(snapshot)
             }
@@ -465,9 +465,9 @@ where
 
     fn get_snapshot(&self) -> StorageResult<Option<T::Snapshot>> {
         match self {
-            StorageType::Persistent(persist_s) => persist_s.get_snapshot(),
-            StorageType::Memory(mem_s) => mem_s.get_snapshot(),
-            StorageType::Broken(mem_s, conf) => {
+            StorageTypeEC::Persistent(persist_s) => persist_s.get_snapshot(),
+            StorageTypeEC::Memory(mem_s) => mem_s.get_snapshot(),
+            StorageTypeEC::Broken(mem_s, conf) => {
                 conf.lock().unwrap().tick()?;
                 mem_s.lock().unwrap().get_snapshot()
             }
@@ -475,14 +475,14 @@ where
     }
 }
 
-pub struct TestSystem {
+pub struct TestSystemEC {
     pub temp_dir_path: String,
     pub kompact_system: Option<KompactSystem>,
     pub nodes: HashMap<NodeId, Arc<Component<OmniPaxosComponentEC>>>,
 }
 
-impl TestSystem {
-    pub fn with(test_config: TestConfig) -> Self {
+impl TestSystemEC {
+    pub fn with(test_config: TestConfigEC) -> Self {
         let temp_dir_path = create_temp_dir();
 
         let mut conf = KompactConfig::default();
@@ -501,8 +501,8 @@ impl TestSystem {
 
         for pid in 1..=test_config.num_nodes as NodeId {
             let op_config = test_config.into_omnipaxos_config(pid);
-            let storage: StorageType<TestECEntry> =
-                StorageType::with(test_config.storage_type, &format!("{temp_dir_path}{pid}"));
+            let storage: StorageTypeEC<TestECEntry> =
+                StorageTypeEC::with(test_config.storage_type, &format!("{temp_dir_path}{pid}"));
             let (omni_replica, omni_reg_f) = system.create_and_register(|| {
                 OmniPaxosComponentEC::with(
                     pid,
@@ -563,8 +563,8 @@ impl TestSystem {
     pub fn create_node(
         &mut self,
         pid: NodeId,
-        test_config: &TestConfig,
-        storage: StorageType<TestECEntry>,
+        test_config: &TestConfigEC,
+        storage: StorageTypeEC<TestECEntry>,
     ) {
         let mut omni_refs: HashMap<NodeId, ActorRef<Message<TestECEntry>>> = HashMap::new();
         let op_config = test_config.into_omnipaxos_config(pid);
@@ -765,7 +765,7 @@ pub mod omnireplica {
         paxos_timer: Option<ScheduledTimer>,
         tick_timer: Option<ScheduledTimer>,
         tick_timeout: Duration,
-        pub paxos: OmniPaxosEC<TestECEntry, StorageType<TestECEntry>>,
+        pub paxos: OmniPaxosEC<TestECEntry, StorageTypeEC<TestECEntry>>,
         decided_futures: HashMap<NodeId, Ask<TestECEntry, ()>>,
         pub election_futures: Vec<Ask<(), Ballot>>,
         current_leader_ballot: Ballot,
@@ -811,7 +811,7 @@ pub mod omnireplica {
         pub fn with(
             pid: NodeId,
             buffer_size: usize,
-            paxos: OmniPaxosEC<TestECEntry, StorageType<TestECEntry>>,
+            paxos: OmniPaxosEC<TestECEntry, StorageTypeEC<TestECEntry>>,
             tick_timeout: Duration,
         ) -> Self {
             Self {

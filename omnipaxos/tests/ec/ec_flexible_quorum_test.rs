@@ -1,4 +1,4 @@
-use crate::utils::{verification::verify_log, TestConfig, TestSystem, Value};
+use crate::ec::utils::{verification::verify_log, TestConfigEC, TestECEntry, TestSystemEC};
 use omnipaxos::util::NodeId;
 use serial_test::serial;
 use std::thread;
@@ -9,15 +9,15 @@ use std::thread;
 #[serial]
 fn ec_flexible_quorum_prepare_phase_test() {
     // Start Kompact system
-    let cfg = TestConfig::load("flexible_quorum_test").expect("Test config couldn't be loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("flexible_quorum_test").expect("Test config couldn't be loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let initial_proposals = (0..cfg.num_proposals / 2).map(Value::with_id).collect();
-    let last_proposals: Vec<Value> = ((cfg.num_proposals / 2)..cfg.num_proposals)
-        .map(Value::with_id)
+    let initial_proposals = (0..cfg.num_proposals / 2).map(TestECEntry::dummy).collect();
+    let last_proposals: Vec<TestECEntry> = ((cfg.num_proposals / 2)..cfg.num_proposals)
+        .map(TestECEntry::dummy)
         .collect();
-    let expected_log: Vec<Value> = (0..cfg.num_proposals).map(Value::with_id).collect();
+    let expected_log: Vec<TestECEntry> = (0..cfg.num_proposals).map(TestECEntry::dummy).collect();
 
     // Propose some initial values
     sys.make_proposals(2, initial_proposals, cfg.wait_timeout);
@@ -52,15 +52,15 @@ fn ec_flexible_quorum_prepare_phase_test() {
 #[serial]
 fn ec_flexible_quorum_accept_phase_test() {
     // Start Kompact system
-    let cfg = TestConfig::load("flexible_quorum_test").expect("Test config couldn't be loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("flexible_quorum_test").expect("Test config couldn't be loaded");
+    let mut sys = TestSystemEC::with(cfg);
     sys.start_all_nodes();
 
-    let initial_proposals = (0..cfg.num_proposals / 2).map(Value::with_id).collect();
-    let last_proposals: Vec<Value> = ((cfg.num_proposals / 2)..cfg.num_proposals)
-        .map(Value::with_id)
+    let initial_proposals = (0..cfg.num_proposals / 2).map(TestECEntry::dummy).collect();
+    let last_proposals: Vec<TestECEntry> = ((cfg.num_proposals / 2)..cfg.num_proposals)
+        .map(TestECEntry::dummy)
         .collect();
-    let expected_log: Vec<Value> = (0..cfg.num_proposals).map(Value::with_id).collect();
+    let expected_log: Vec<TestECEntry> = (0..cfg.num_proposals).map(TestECEntry::dummy).collect();
 
     // Propose some values
     sys.make_proposals(2, initial_proposals, cfg.wait_timeout);

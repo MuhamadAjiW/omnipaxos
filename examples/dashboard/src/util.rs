@@ -1,5 +1,5 @@
 use crate::entry::LogEntry;
-use omnipaxos::{messages::Message, util::NodeId};
+use omnipaxos::{messages::Message, util::NodeId, ClusterConfig};
 use std::{collections::HashMap, env, time::Duration};
 use tokio::sync::mpsc;
 
@@ -16,8 +16,8 @@ pub const BATCH_PERIOD: Duration = Duration::from_millis(50);
 pub(crate) fn initialise_channels(
     servers: &[u64],
 ) -> (
-    HashMap<NodeId, mpsc::Sender<Message<LogEntry>>>,
-    HashMap<NodeId, mpsc::Receiver<Message<LogEntry>>>,
+    HashMap<NodeId, mpsc::Sender<Message<LogEntry, ClusterConfig>>>,
+    HashMap<NodeId, mpsc::Receiver<Message<LogEntry, ClusterConfig>>>,
 ) {
     let mut sender_channels = HashMap::new();
     let mut receiver_channels = HashMap::new();

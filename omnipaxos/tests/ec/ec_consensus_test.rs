@@ -1,6 +1,6 @@
-use crate::utils::{
-    create_proposals, create_temp_dir, verification::*, StorageType, TestConfig, TestSystem, Value,
-    ValueSnapshot,
+use crate::ec::utils::{
+    create_proposals, create_temp_dir, verification::*, StorageTypeEC, TestConfigEC, TestECEntry,
+    TestECEntrySnapshot, TestSystemEC,
 };
 use kompact::prelude::{promise, Ask, FutureCollection};
 use omnipaxos::{
@@ -14,8 +14,8 @@ use serial_test::serial;
 #[test]
 #[serial]
 fn ec_consensus_test() {
-    let cfg = TestConfig::load("consensus_test").expect("Test config loaded");
-    let mut sys = TestSystem::with(cfg);
+    let cfg = TestConfigEC::load("consensus_test").expect("Test config loaded");
+    let mut sys = TestSystemEC::with(cfg);
 
     let first_node = sys.nodes.get(&1).unwrap();
     let mut futures = vec![];
@@ -60,20 +60,20 @@ fn ec_consensus_test() {
 #[test]
 #[serial]
 fn ec_read_test() {
-    let cfg = TestConfig::load("consensus_test").expect("Test config loaded");
+    let cfg = TestConfigEC::load("consensus_test").expect("Test config loaded");
 
-    let log: Vec<Value> = [1, 3, 2, 7, 5, 10, 29, 100, 8, 12]
+    let log: Vec<TestECEntry> = [1, 3, 2, 7, 5, 10, 29, 100, 8, 12]
         .iter()
-        .map(|v| Value::with_id(*v as u64))
+        .map(|v| TestECEntry::dummy(*v as u64))
         .collect();
     let decided_idx = 6;
     let snapshotted_idx = 4;
     let (snapshotted, _suffix) = log.split_at(snapshotted_idx);
 
-    let exp_snapshot = ValueSnapshot::create(snapshotted);
+    let exp_snapshot = TestECEntrySnapshot::create(snapshotted);
 
     let temp_dir = create_temp_dir();
-    let mut storage = StorageType::<Value>::with(cfg.storage_type, &temp_dir);
+    let mut storage = StorageTypeEC::<TestECEntry>::with(cfg.storage_type, &temp_dir);
     storage
         .append_entries(log.clone())
         .expect("Failed to append entries");
@@ -117,7 +117,7 @@ fn ec_read_test() {
 
     // create stopped storage and SequencePaxos to test reading StopSign.
     let ss_temp_dir = create_temp_dir();
-    let mut stopped_storage = StorageType::<Value>::with(cfg.storage_type, &ss_temp_dir);
+    let mut stopped_storage = StorageTypeEC::<TestECEntry>::with(cfg.storage_type, &ss_temp_dir);
     let ss = StopSign::with(
         ClusterConfig {
             configuration_id: 2,
@@ -150,19 +150,19 @@ fn ec_read_test() {
 #[test]
 #[serial]
 fn ec_read_entries_test() {
-    let cfg = TestConfig::load("consensus_test").expect("Test config loaded");
+    let cfg = TestConfigEC::load("consensus_test").expect("Test config loaded");
 
-    let log: Vec<Value> = [1, 3, 2, 7, 5, 10, 29, 100, 8, 12]
+    let log: Vec<TestECEntry> = [1, 3, 2, 7, 5, 10, 29, 100, 8, 12]
         .iter()
-        .map(|v| Value::with_id(*v as u64))
+        .map(|v| TestECEntry::dummy(*v as u64))
         .collect();
     let decided_idx = 6;
     let snapshotted_idx = 4;
     let (snapshotted, _suffix) = log.split_at(snapshotted_idx);
-    let exp_snapshot = ValueSnapshot::create(snapshotted);
+    let exp_snapshot = TestECEntrySnapshot::create(snapshotted);
 
     let temp_dir = create_temp_dir();
-    let mut storage = StorageType::<Value>::with(cfg.storage_type, &temp_dir);
+    let mut storage = StorageTypeEC::<TestECEntry>::with(cfg.storage_type, &temp_dir);
     storage
         .append_entries(log.clone())
         .expect("Failed to append entries");
@@ -211,7 +211,7 @@ fn ec_read_entries_test() {
 
     // create stopped storage and SequencePaxos to test reading StopSign.
     let ss_temp_dir = create_temp_dir();
-    let mut stopped_storage = StorageType::<Value>::with(cfg.storage_type, &ss_temp_dir);
+    let mut stopped_storage = StorageTypeEC::<TestECEntry>::with(cfg.storage_type, &ss_temp_dir);
 
     let ss = StopSign::with(
         ClusterConfig {
@@ -273,6 +273,10 @@ fn ec_read_entries_test() {
         .read_entries(from_idx..)
         .expect("No StopSign and Entries");
     let (snapshot, stopsign) = entries.split_at(entries.len() - 1);
-    verify_snapshot(snapshot, snapshotted_idx, &ValueSnapshot::create(&log));
+    verify_snapshot(
+        snapshot,
+        snapshotted_idx,
+        &TestECEntrySnapshot::create(&log),
+    );
     verify_stopsign(stopsign, &ss);
 }
