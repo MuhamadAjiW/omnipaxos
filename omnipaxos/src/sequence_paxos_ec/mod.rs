@@ -2,7 +2,7 @@ use super::{ballot_leader_election::Ballot, messages::sequence_paxos::*, util::L
 #[cfg(feature = "logging")]
 use crate::utils::logger::create_logger;
 use crate::{
-    erasure::{ec_service::ECService, log_entry::LogEntry},
+    erasure::{ec_service::ECService, log_entry::ECEntry},
     messages::Message,
     storage::{
         internal_storage::{InternalStorage, InternalStorageConfig},
@@ -25,7 +25,7 @@ pub mod leader;
 /// If snapshots are not desired to be used, use `()` for the type parameter `S`.
 pub(crate) struct SequencePaxosEC<T, B>
 where
-    T: LogEntry,
+    T: ECEntry,
     B: Storage<T>,
 {
     pub(crate) internal_storage: InternalStorage<B, T>,
@@ -49,7 +49,7 @@ where
 
 impl<T, B> SequencePaxosEC<T, B>
 where
-    T: LogEntry,
+    T: ECEntry,
     B: Storage<T>,
 {
     /*** User functions ***/

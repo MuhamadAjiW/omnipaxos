@@ -2,7 +2,7 @@ use super::{ballot_leader_election::Ballot, messages::sequence_paxos::*, util::L
 #[cfg(feature = "logging")]
 use crate::utils::logger::create_logger;
 use crate::{
-    erasure::{ec_service::ECService, log_entry::LogEntry},
+    erasure::{ec_service::ECService, log_entry::ECEntry},
     messages::Message,
     storage::{
         internal_storage::{InternalStorage, InternalStorageConfig},

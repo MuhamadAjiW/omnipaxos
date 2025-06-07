@@ -2,14 +2,14 @@ use super::super::{
     ballot_leader_election::Ballot,
     util::{LeaderState, PromiseMetaData},
 };
-use crate::erasure::log_entry::LogEntry;
+use crate::erasure::log_entry::ECEntry;
 use crate::util::{AcceptedMetaData, WRITE_ERROR_MSG};
 
 use super::*;
 
 impl<T, B> SequencePaxosEC<T, B>
 where
-    T: LogEntry,
+    T: ECEntry,
     B: Storage<T>,
 {
     /// Handle a new leader. Should be called when the leader election has elected a new leader with the ballot `n`

@@ -6,7 +6,7 @@ use crate::util::{MessageStatus, WRITE_ERROR_MSG};
 
 impl<T, B> SequencePaxosEC<T, B>
 where
-    T: LogEntry,
+    T: ECEntry,
     B: Storage<T>,
 {
     /*** Follower ***/

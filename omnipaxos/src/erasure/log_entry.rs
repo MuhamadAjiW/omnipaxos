@@ -29,7 +29,7 @@ impl fmt::Display for OperationType {
 }
 
 /// Trait for a log entry for erasure coded consensus.
-pub trait LogEntry: Entry {
+pub trait ECEntry: Entry {
     /// The operation type, e.g., SET or DELETE.
     fn operation(&self) -> &OperationType;
     /// The key of the log entry, which is a unique identifier for the value.
@@ -40,7 +40,7 @@ pub trait LogEntry: Entry {
 
 /// A default log entry struct implementing the LogEntry trait
 #[derive(Clone, Debug, PartialEq)]
-pub struct DefaultLogEntry {
+pub struct DefaultECEntry {
     /// The type of operation performed on the log entry, e.g., SET or DELETE.
     pub operation: OperationType,
     /// The key of the log entry, which is a unique identifier for the value.
@@ -49,11 +49,11 @@ pub struct DefaultLogEntry {
     pub value: EntryFragment,
 }
 
-impl Entry for DefaultLogEntry {
+impl Entry for DefaultECEntry {
     type Snapshot = NoSnapshot;
 }
 
-impl LogEntry for DefaultLogEntry {
+impl ECEntry for DefaultECEntry {
     fn operation(&self) -> &OperationType {
         &self.operation
     }

@@ -2,7 +2,7 @@ use super::super::{
     ballot_leader_election::Ballot,
     util::{LeaderState, PromiseMetaData},
 };
-use crate::erasure::log_entry::LogEntry;
+use crate::erasure::log_entry::ECEntry;
 use crate::util::{AcceptedMetaData, WRITE_ERROR_MSG};
 
 use super::*;
