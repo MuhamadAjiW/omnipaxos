@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "omnipaxos",
-    "omnipaxos_ec",
     "omnipaxos_storage",
     "omnipaxos_macros",
     "omnipaxos_ui",

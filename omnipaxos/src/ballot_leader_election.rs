@@ -15,14 +15,12 @@ use crate::{
     util::NodeId,
     OmniPaxosConfig,
 };
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "logging")]
 use slog::{info, trace, Logger};
 
 /// Used to define a Sequence Paxos epoch
-#[derive(Clone, Copy, Eq, Debug, Default, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Copy, Eq, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Ballot {
     /// The identifier for the configuration that the replica with this ballot is part of.
     pub config_id: ConfigurationId,

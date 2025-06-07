@@ -10,10 +10,7 @@ use crate::{
     },
     utils::{ui, ui::ClusterState},
 };
-#[cfg(any(feature = "toml_config", feature = "serde"))]
-use serde::Deserialize;
-#[cfg(feature = "serde")]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "toml_config")]
 use std::fs;
 use std::{
@@ -85,10 +82,8 @@ impl OmniPaxosConfig {
 /// * `configuration_id`: The identifier for the cluster configuration that this OmniPaxos server is part of.
 /// * `nodes`: The nodes in the cluster i.e. the `pid`s of the other servers in the configuration.
 /// * `flexible_quorum` : Defines read and write quorum sizes. Can be used for different latency vs fault tolerance tradeoffs.
-#[derive(Clone, Debug, PartialEq, Default)]
-#[cfg_attr(any(feature = "serde", feature = "toml_config"), derive(Deserialize))]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "toml_config", serde(default))]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ClusterConfig {
     /// The identifier for the cluster configuration that this OmniPaxos server is part of. Must
     /// not be 0 and be greater than the previous configuration's id.

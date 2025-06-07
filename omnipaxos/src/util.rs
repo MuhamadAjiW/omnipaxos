@@ -3,13 +3,11 @@ use super::{
     messages::sequence_paxos::Promise,
     storage::{Entry, SnapshotType, StopSign},
 };
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt::Debug, marker::PhantomData};
 
 /// Struct used to help another server synchronize their log with the current state of our own log.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LogSync<T>
 where
     T: Entry,
@@ -368,8 +366,7 @@ pub(crate) enum MessageStatus {
 }
 
 /// Keeps track of the ordering of messages in the accept phase
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct SequenceNumber {
     /// Meant to refer to a TCP session
     pub session: u64,
@@ -413,9 +410,7 @@ impl LogicalClock {
 
 /// Flexible quorums can be used to increase/decrease the read and write quorum sizes,
 /// for different latency vs fault tolerance tradeoffs.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(any(feature = "serde", feature = "toml_config"), derive(Deserialize))]
-#[cfg_attr(feature = "serde", derive(Serialize))]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FlexibleQuorum {
     /// The number of nodes a leader needs to consult to get an up-to-date view of the log.
     pub read_quorum_size: usize,

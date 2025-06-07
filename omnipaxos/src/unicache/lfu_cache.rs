@@ -2,8 +2,7 @@ use crate::unicache::*;
 use lfu::LFUCache;
 
 /// UniCache with least-frequently-used eviction policy
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LFUniCache<Encodable, Encoded>
 where
     Encodable: Hash + Eq + Clone,

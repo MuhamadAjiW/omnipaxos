@@ -5,17 +5,11 @@ use super::ballot_leader_election::Ballot;
 #[cfg(feature = "unicache")]
 use crate::unicache::*;
 use crate::ClusterConfig;
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt::Debug};
 
 /// Type of the entries stored in the log.
 pub trait Entry: Clone + Debug {
-    #[cfg(not(feature = "serde"))]
-    /// The snapshot type for this entry type.
-    type Snapshot: Snapshot<Self>;
-
-    #[cfg(feature = "serde")]
     /// The snapshot type for this entry type.
     type Snapshot: Snapshot<Self> + Serialize + for<'a> Deserialize<'a>;
 
@@ -29,25 +23,17 @@ pub trait Entry: Clone + Debug {
     /// The type representing the **NOT** encodable parts of an `Entry`. Any `NotEncodable` data will be transmitted in its original form, without encoding. It can be set to `()` if the whole `Entry` is cachable. See docs of `pre_process()` for an example.
     type NotEncodable: NotEncodable;
 
-    #[cfg(all(feature = "unicache", not(feature = "serde")))]
-    /// The type that represents if there was a cache hit or miss in UniCache.
-    type EncodeResult: Clone + Debug;
-
-    #[cfg(all(feature = "unicache", feature = "serde"))]
+    #[cfg(all(feature = "unicache"))]
     /// The type that represents the results of trying to encode i.e., if there was a cache hit or miss in UniCache.
     type EncodeResult: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
 
-    #[cfg(all(feature = "unicache", not(feature = "serde")))]
-    /// The type that represents the results of trying to encode i.e., if there was a cache hit or miss in UniCache.
-    type UniCache: UniCache<T = Self>;
-    #[cfg(all(feature = "unicache", feature = "serde"))]
+    #[cfg(all(feature = "unicache"))]
     /// The unicache type for caching popular/re-occurring fields of an entry.
     type UniCache: UniCache<T = Self> + Serialize + for<'a> Deserialize<'a>;
 }
 
 /// A StopSign entry that marks the end of a configuration. Used for reconfiguration.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct StopSign {
     /// The new `Omnipaxos` cluster configuration
     pub next_config: ClusterConfig,
@@ -67,8 +53,7 @@ impl StopSign {
 
 /// Snapshot type. A `Complete` snapshot contains all snapshotted data while `Delta` has snapshotted changes since an earlier snapshot.
 #[allow(missing_docs)]
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SnapshotType<T>
 where
     T: Entry,
@@ -196,8 +181,7 @@ where
 }
 
 /// A place holder type for when not using snapshots. You should not use this type, it is only internally when deriving the Entry implementation.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct NoSnapshot;
 
 impl<T: Entry> Snapshot<T> for NoSnapshot {

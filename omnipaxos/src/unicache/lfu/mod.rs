@@ -1,10 +1,8 @@
 //! LFU cache implementation based on the [lfu](https://crates.io/crates/lfu) crate. It has been modified to to support the required operations for UniCache in OmniPaxos.
 
-#[cfg(feature = "serde")]
 mod serialization;
 
 use linked_hash_set::LinkedHashSet;
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{
@@ -25,8 +23,7 @@ impl<K: Hash + Eq + Clone> Default for LinkedHashSetWrapper<K> {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct LFUCache<K: Hash + Eq + Clone, V> {
     values: HashMap<K, ValueCounter<V>>,
     frequency_bin: HashMap<usize, LinkedHashSetWrapper<K>>,
@@ -34,8 +31,7 @@ pub struct LFUCache<K: Hash + Eq + Clone, V> {
     min_frequency: usize,
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct ValueCounter<V> {
     value: V,
     count: usize,
