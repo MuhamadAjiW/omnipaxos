@@ -5,7 +5,7 @@ use crate::ec::utils::{
 use kompact::prelude::{promise, Ask, FutureCollection};
 use omnipaxos::{
     storage::{Snapshot, StopSign, Storage},
-    ClusterConfig, OmniPaxosConfig,
+    ClusterConfigEC, OmniPaxosECConfig,
 };
 use serial_test::serial;
 
@@ -81,7 +81,7 @@ fn ec_read_test() {
         .set_decided_idx(decided_idx)
         .expect("Failed to set decided index");
 
-    let mut op_config = OmniPaxosConfig::default();
+    let mut op_config = OmniPaxosECConfig::default();
     op_config.server_config.pid = 1;
     op_config.cluster_config.nodes = vec![1, 2, 3];
     op_config.cluster_config.configuration_id = 1;
@@ -119,7 +119,7 @@ fn ec_read_test() {
     let ss_temp_dir = create_temp_dir();
     let mut stopped_storage = StorageTypeEC::<TestECEntry>::with(cfg.storage_type, &ss_temp_dir);
     let ss = StopSign::with(
-        ClusterConfig {
+        ClusterConfigEC {
             configuration_id: 2,
             ..Default::default()
         },
@@ -169,7 +169,7 @@ fn ec_read_entries_test() {
     storage
         .set_decided_idx(decided_idx)
         .expect("Failed to set decided index");
-    let mut op_config = OmniPaxosConfig::default();
+    let mut op_config = OmniPaxosECConfig::default();
     op_config.server_config.pid = 1;
     op_config.cluster_config.nodes = vec![1, 2, 3];
     op_config.cluster_config.configuration_id = 1;
@@ -214,7 +214,7 @@ fn ec_read_entries_test() {
     let mut stopped_storage = StorageTypeEC::<TestECEntry>::with(cfg.storage_type, &ss_temp_dir);
 
     let ss = StopSign::with(
-        ClusterConfig {
+        ClusterConfigEC {
             configuration_id: 2,
             ..Default::default()
         },

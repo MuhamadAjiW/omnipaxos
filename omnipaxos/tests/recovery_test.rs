@@ -1,7 +1,10 @@
 pub mod utils;
 
 use kompact::prelude::{promise, Ask, FutureCollection, KFuture};
-use omnipaxos::util::{LogEntry, NodeId};
+use omnipaxos::{
+    util::{LogEntry, NodeId},
+    ClusterConfig,
+};
 use serial_test::serial;
 use std::{thread, time::Duration};
 use utils::{verification::verify_log, StorageType, TestConfig, TestSystem, Value};
@@ -33,7 +36,8 @@ fn leader_fail_follower_propose_test() {
         .nodes
         .get(&leader)
         .expect("No SequencePaxos component found");
-    let read_log: Vec<LogEntry<Value>> = recovery_px.on_definition(|x| x.read_decided_log());
+    let read_log: Vec<LogEntry<Value, ClusterConfig>> =
+        recovery_px.on_definition(|x| x.read_decided_log());
 
     verify_log(read_log, proposals);
 
@@ -69,7 +73,8 @@ fn leader_fail_leader_propose_test() {
         .nodes
         .get(&leader)
         .expect("No SequencePaxos component found");
-    let read_log: Vec<LogEntry<Value>> = recovery_px.on_definition(|x| x.read_decided_log());
+    let read_log: Vec<LogEntry<Value, ClusterConfig>> =
+        recovery_px.on_definition(|x| x.read_decided_log());
 
     verify_log(read_log, proposals);
 
@@ -108,7 +113,8 @@ fn follower_fail_leader_propose_test() {
         .nodes
         .get(&leader)
         .expect("No SequencePaxos component found");
-    let read_log: Vec<LogEntry<Value>> = recovery_px.on_definition(|x| x.read_decided_log());
+    let read_log: Vec<LogEntry<Value, ClusterConfig>> =
+        recovery_px.on_definition(|x| x.read_decided_log());
 
     verify_log(read_log, proposals);
 
@@ -147,7 +153,8 @@ fn follower_fail_follower_propose_test() {
         .nodes
         .get(&leader)
         .expect("No SequencePaxos component found");
-    let read_log: Vec<LogEntry<Value>> = recovery_px.on_definition(|x| x.read_decided_log());
+    let read_log: Vec<LogEntry<Value, ClusterConfig>> =
+        recovery_px.on_definition(|x| x.read_decided_log());
 
     verify_log(read_log, proposals);
 

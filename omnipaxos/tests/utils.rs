@@ -204,12 +204,12 @@ pub enum StorageType<T>
 where
     T: Entry,
 {
-    Persistent(PersistentStorage<T>),
-    Memory(MemoryStorage<T>),
+    Persistent(PersistentStorage<T, ClusterConfig>),
+    Memory(MemoryStorage<T, ClusterConfig>),
     /// Mocks a storage that fails depending of the config.
     /// Arc<Mutex<_>> is needed since we need to mutate conf through immutable references.
     Broken(
-        Arc<Mutex<MemoryStorage<T>>>,
+        Arc<Mutex<MemoryStorage<T, ClusterConfig>>>,
         Arc<Mutex<BrokenStorageConfig>>,
     ),
 }
@@ -233,19 +233,19 @@ where
         }
     }
 
-    pub fn with_memory(mem: MemoryStorage<T>) -> Self {
+    pub fn with_memory(mem: MemoryStorage<T, ClusterConfig>) -> Self {
         StorageType::Memory(mem)
     }
 }
 
-impl<T> Storage<T> for StorageType<T>
+impl<T> Storage<T, ClusterConfig> for StorageType<T>
 where
     T: Entry + Serialize + for<'a> Deserialize<'a>,
     T::Snapshot: Serialize + for<'a> Deserialize<'a>,
 {
     fn write_atomically(
         &mut self,
-        ops: Vec<omnipaxos::storage::StorageOp<T>>,
+        ops: Vec<omnipaxos::storage::StorageOp<T, ClusterConfig>>,
     ) -> StorageResult<()> {
         match self {
             StorageType::Persistent(persist_s) => persist_s.write_atomically(ops),
@@ -390,7 +390,10 @@ where
         }
     }
 
-    fn set_stopsign(&mut self, s: Option<omnipaxos::storage::StopSign>) -> StorageResult<()> {
+    fn set_stopsign(
+        &mut self,
+        s: Option<omnipaxos::storage::StopSign<ClusterConfig>>,
+    ) -> StorageResult<()> {
         match self {
             StorageType::Persistent(persist_s) => persist_s.set_stopsign(s),
             StorageType::Memory(mem_s) => mem_s.set_stopsign(s),
@@ -401,7 +404,7 @@ where
         }
     }
 
-    fn get_stopsign(&self) -> StorageResult<Option<omnipaxos::storage::StopSign>> {
+    fn get_stopsign(&self) -> StorageResult<Option<omnipaxos::storage::StopSign<ClusterConfig>>> {
         match self {
             StorageType::Persistent(persist_s) => persist_s.get_stopsign(),
             StorageType::Memory(mem_s) => mem_s.get_stopsign(),
@@ -490,7 +493,8 @@ impl TestSystem {
         let system = conf.build().expect("KompactSystem");
 
         let mut nodes = HashMap::new();
-        let mut omni_refs: HashMap<NodeId, ActorRef<Message<Value>>> = HashMap::new();
+        let mut omni_refs: HashMap<NodeId, ActorRef<Message<Value, ClusterConfig>>> =
+            HashMap::new();
 
         for pid in 1..=test_config.num_nodes as NodeId {
             let op_config = test_config.into_omnipaxos_config(pid);
@@ -559,7 +563,8 @@ impl TestSystem {
         test_config: &TestConfig,
         storage: StorageType<Value>,
     ) {
-        let mut omni_refs: HashMap<NodeId, ActorRef<Message<Value>>> = HashMap::new();
+        let mut omni_refs: HashMap<NodeId, ActorRef<Message<Value, ClusterConfig>>> =
+            HashMap::new();
         let op_config = test_config.into_omnipaxos_config(pid);
         let (omni_replica, omni_reg_f) = self
             .kompact_system
@@ -753,7 +758,7 @@ pub mod omnireplica {
         ctx: ComponentContext<Self>,
         #[allow(dead_code)]
         pid: NodeId,
-        pub peers: HashMap<NodeId, ActorRef<Message<Value>>>,
+        pub peers: HashMap<NodeId, ActorRef<Message<Value, ClusterConfig>>>,
         pub peer_disconnections: HashSet<NodeId>,
         paxos_timer: Option<ScheduledTimer>,
         tick_timer: Option<ScheduledTimer>,
@@ -763,7 +768,7 @@ pub mod omnireplica {
         pub election_futures: Vec<Ask<(), Ballot>>,
         current_leader_ballot: Ballot,
         decided_idx: usize,
-        outgoing_buffer: Vec<Message<Value>>,
+        outgoing_buffer: Vec<Message<Value, ClusterConfig>>,
     }
 
     impl ComponentLifecycle for OmniPaxosComponent {
@@ -824,7 +829,7 @@ pub mod omnireplica {
             }
         }
 
-        pub fn read_decided_log(&self) -> Vec<LogEntry<Value>> {
+        pub fn read_decided_log(&self) -> Vec<LogEntry<Value, ClusterConfig>> {
             self.paxos.read_decided_suffix(0).unwrap()
         }
 
@@ -845,7 +850,10 @@ pub mod omnireplica {
             }
         }
 
-        pub fn set_peers(&mut self, peers: HashMap<NodeId, ActorRef<Message<Value>>>) {
+        pub fn set_peers(
+            &mut self,
+            peers: HashMap<NodeId, ActorRef<Message<Value, ClusterConfig>>>,
+        ) {
             self.peers = peers;
         }
 
@@ -900,7 +908,7 @@ pub mod omnireplica {
     }
 
     impl Actor for OmniPaxosComponent {
-        type Message = Message<Value>;
+        type Message = Message<Value, ClusterConfig>;
 
         fn receive_local(&mut self, msg: Self::Message) -> Handled {
             self.paxos.handle_incoming(msg);
@@ -1001,6 +1009,7 @@ pub mod verification {
     use omnipaxos::{
         storage::{Snapshot, StopSign},
         util::{LogEntry, NodeId},
+        ClusterConfig,
     };
 
     /// Verify that the log matches the proposed values, Depending on
@@ -1008,7 +1017,7 @@ pub mod verification {
     /// * All entries are decided, verify the decided entries
     /// * Only a snapshot was taken, verify the snapshot
     /// * A snapshot was taken and entries decided on afterwards, verify both the snapshot and entries
-    pub fn verify_log(read_log: Vec<LogEntry<Value>>, proposals: Vec<Value>) {
+    pub fn verify_log(read_log: Vec<LogEntry<Value, ClusterConfig>>, proposals: Vec<Value>) {
         let num_proposals = proposals.len();
         match &read_log[..] {
             [LogEntry::Decided(_), ..] => verify_entries(&read_log, &proposals, 0, num_proposals),
@@ -1034,7 +1043,7 @@ pub mod verification {
 
     /// Verify that the log has a single snapshot of the latest entry.
     pub fn verify_snapshot(
-        read_entries: &[LogEntry<Value>],
+        read_entries: &[LogEntry<Value, ClusterConfig>],
         exp_compacted_idx: usize,
         exp_snapshot: &ValueSnapshot,
     ) {
@@ -1060,7 +1069,7 @@ pub mod verification {
 
     /// Verify that all log entries are decided and matches the proposed entries.
     pub fn verify_entries(
-        read_entries: &[LogEntry<Value>],
+        read_entries: &[LogEntry<Value, ClusterConfig>],
         exp_entries: &[Value],
         offset: usize,
         decided_idx: usize,
@@ -1091,7 +1100,10 @@ pub mod verification {
     }
 
     /// Verify that the log entry contains only a stopsign matching `exp_stopsign`
-    pub fn verify_stopsign(read_entries: &[LogEntry<Value>], exp_stopsign: &StopSign) {
+    pub fn verify_stopsign(
+        read_entries: &[LogEntry<Value, ClusterConfig>],
+        exp_stopsign: &StopSign<ClusterConfig>,
+    ) {
         assert_eq!(
             read_entries.len(),
             1,
@@ -1110,7 +1122,7 @@ pub mod verification {
 
     /// Verifies that there is a majority when an entry is proposed.
     pub fn check_quorum(
-        logs: &[(NodeId, Vec<LogEntry<Value>>)],
+        logs: &[(NodeId, Vec<LogEntry<Value, ClusterConfig>>)],
         quorum_size: usize,
         proposals: &[Value],
     ) {
@@ -1131,7 +1143,10 @@ pub mod verification {
     }
 
     /// Verifies that only proposed values are decided.
-    pub fn check_validity(logs: &[(NodeId, Vec<LogEntry<Value>>)], proposals: &[Value]) {
+    pub fn check_validity(
+        logs: &[(NodeId, Vec<LogEntry<Value, ClusterConfig>>)],
+        proposals: &[Value],
+    ) {
         logs.iter().for_each(|(_pid, log)| {
             for entry in log {
                 if let LogEntry::Decided(v) = entry {
@@ -1146,7 +1161,9 @@ pub mod verification {
     }
 
     /// Verifies logs do not diverge. **NOTE**: this check assumes normal execution within one round without any snapshots, trimming.
-    pub fn check_consistent_log_prefixes(logs: &Vec<(NodeId, Vec<LogEntry<Value>>)>) {
+    pub fn check_consistent_log_prefixes(
+        logs: &Vec<(NodeId, Vec<LogEntry<Value, ClusterConfig>>)>,
+    ) {
         let (_, longest_log) = logs
             .iter()
             .max_by(|(_, sr), (_, other_sr)| sr.len().cmp(&other_sr.len()))

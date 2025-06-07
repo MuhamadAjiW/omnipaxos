@@ -133,7 +133,7 @@ fn ec_reconnect_after_dropped_accepts_test() {
     thread::sleep(SLEEP_TIMEOUT);
 
     // Verify log
-    let followers_log: Vec<LogEntry<TestECEntry>> =
+    let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.read_decided_log());
     verify_log(followers_log, expected_log);
 
@@ -210,7 +210,7 @@ fn ec_reconnect_after_dropped_prepare_test() {
     }
     thread::sleep(SLEEP_TIMEOUT);
 
-    let followers_log: Vec<LogEntry<TestECEntry>> =
+    let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.read_decided_log());
     verify_log(followers_log, expected_log);
 
@@ -293,7 +293,7 @@ fn ec_reconnect_after_dropped_promise_test() {
     thread::sleep(SLEEP_TIMEOUT);
 
     // Verify log
-    let followers_log: Vec<LogEntry<TestECEntry>> =
+    let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.read_decided_log());
     verify_log(followers_log, expected_log);
 
@@ -360,7 +360,7 @@ fn ec_reconnect_after_dropped_preparereq_test() {
     // Wait for Re-Sync with leader to finish
     thread::sleep(SLEEP_TIMEOUT);
 
-    let followers_log: Vec<LogEntry<TestECEntry>> =
+    let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.read_decided_log());
     verify_log(followers_log, expected_log);
 
@@ -418,7 +418,7 @@ fn ec_resync_after_dropped_acceptstopsign_test() {
         .expect("Timeout for collecting future of decided proposal expired");
 
     // Verify log
-    let followers_log: Vec<LogEntry<TestECEntry>> =
+    let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.read_decided_log());
     verify_stopsign(&followers_log, &StopSign::with(next_config.into(), None));
 
@@ -485,7 +485,7 @@ fn ec_reconnect_after_dropped_acceptstopsign_test() {
 
     // Verify log
     let follower = sys.nodes.get(&follower_id).unwrap();
-    let followers_log: Vec<LogEntry<TestECEntry>> =
+    let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.paxos.read_entries(0..1).expect("Cannot read log entry"));
     verify_stopsign(
         &followers_log,

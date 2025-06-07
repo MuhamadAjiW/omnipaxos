@@ -2,7 +2,6 @@ use self::omnireplica::OmniPaxosComponentEC;
 use kompact::{config_keys::system, executors::crossbeam_workstealing_pool, prelude::*};
 use omnipaxos::{
     ballot_leader_election::Ballot,
-    macros::*,
     messages::Message,
     storage::{Entry, Storage, StorageResult},
     util::{FlexibleQuorum, NodeId},
@@ -211,12 +210,12 @@ pub enum StorageTypeEC<T>
 where
     T: ECEntry,
 {
-    Persistent(PersistentStorage<T>),
-    Memory(MemoryStorage<T>),
+    Persistent(PersistentStorage<T, ClusterConfigEC>),
+    Memory(MemoryStorage<T, ClusterConfigEC>),
     /// Mocks a storage that fails depending of the config.
     /// Arc<Mutex<_>> is needed since we need to mutate conf through immutable references.
     Broken(
-        Arc<Mutex<MemoryStorage<T>>>,
+        Arc<Mutex<MemoryStorage<T, ClusterConfigEC>>>,
         Arc<Mutex<BrokenStorageConfig>>,
     ),
 }
@@ -240,19 +239,19 @@ where
         }
     }
 
-    pub fn with_memory(mem: MemoryStorage<T>) -> Self {
+    pub fn with_memory(mem: MemoryStorage<T, ClusterConfigEC>) -> Self {
         StorageTypeEC::Memory(mem)
     }
 }
 
-impl<T> Storage<T> for StorageTypeEC<T>
+impl<T> Storage<T, ClusterConfigEC> for StorageTypeEC<T>
 where
     T: ECEntry + Serialize + for<'a> Deserialize<'a>,
     T::Snapshot: Serialize + for<'a> Deserialize<'a>,
 {
     fn write_atomically(
         &mut self,
-        ops: Vec<omnipaxos::storage::StorageOp<T>>,
+        ops: Vec<omnipaxos::storage::StorageOp<T, ClusterConfigEC>>,
     ) -> StorageResult<()> {
         match self {
             StorageTypeEC::Persistent(persist_s) => persist_s.write_atomically(ops),
@@ -397,7 +396,10 @@ where
         }
     }
 
-    fn set_stopsign(&mut self, s: Option<omnipaxos::storage::StopSign>) -> StorageResult<()> {
+    fn set_stopsign(
+        &mut self,
+        s: Option<omnipaxos::storage::StopSign<ClusterConfigEC>>,
+    ) -> StorageResult<()> {
         match self {
             StorageTypeEC::Persistent(persist_s) => persist_s.set_stopsign(s),
             StorageTypeEC::Memory(mem_s) => mem_s.set_stopsign(s),
@@ -408,7 +410,7 @@ where
         }
     }
 
-    fn get_stopsign(&self) -> StorageResult<Option<omnipaxos::storage::StopSign>> {
+    fn get_stopsign(&self) -> StorageResult<Option<omnipaxos::storage::StopSign<ClusterConfigEC>>> {
         match self {
             StorageTypeEC::Persistent(persist_s) => persist_s.get_stopsign(),
             StorageTypeEC::Memory(mem_s) => mem_s.get_stopsign(),
@@ -497,7 +499,8 @@ impl TestSystemEC {
         let system = conf.build().expect("KompactSystem");
 
         let mut nodes = HashMap::new();
-        let mut omni_refs: HashMap<NodeId, ActorRef<Message<TestECEntry>>> = HashMap::new();
+        let mut omni_refs: HashMap<NodeId, ActorRef<Message<TestECEntry, ClusterConfigEC>>> =
+            HashMap::new();
 
         for pid in 1..=test_config.num_nodes as NodeId {
             let op_config = test_config.into_omnipaxos_config(pid);
@@ -566,7 +569,8 @@ impl TestSystemEC {
         test_config: &TestConfigEC,
         storage: StorageTypeEC<TestECEntry>,
     ) {
-        let mut omni_refs: HashMap<NodeId, ActorRef<Message<TestECEntry>>> = HashMap::new();
+        let mut omni_refs: HashMap<NodeId, ActorRef<Message<TestECEntry, ClusterConfigEC>>> =
+            HashMap::new();
         let op_config = test_config.into_omnipaxos_config(pid);
         let (omni_replica, omni_reg_f) = self
             .kompact_system
@@ -760,7 +764,7 @@ pub mod omnireplica {
         ctx: ComponentContext<Self>,
         #[allow(dead_code)]
         pid: NodeId,
-        pub peers: HashMap<NodeId, ActorRef<Message<TestECEntry>>>,
+        pub peers: HashMap<NodeId, ActorRef<Message<TestECEntry, ClusterConfigEC>>>,
         pub peer_disconnections: HashSet<NodeId>,
         paxos_timer: Option<ScheduledTimer>,
         tick_timer: Option<ScheduledTimer>,
@@ -770,7 +774,7 @@ pub mod omnireplica {
         pub election_futures: Vec<Ask<(), Ballot>>,
         current_leader_ballot: Ballot,
         decided_idx: usize,
-        outgoing_buffer: Vec<Message<TestECEntry>>,
+        outgoing_buffer: Vec<Message<TestECEntry, ClusterConfigEC>>,
     }
 
     impl ComponentLifecycle for OmniPaxosComponentEC {
@@ -831,7 +835,7 @@ pub mod omnireplica {
             }
         }
 
-        pub fn read_decided_log(&self) -> Vec<LogEntry<TestECEntry>> {
+        pub fn read_decided_log(&self) -> Vec<LogEntry<TestECEntry, ClusterConfigEC>> {
             self.paxos.read_decided_suffix(0).unwrap()
         }
 
@@ -852,7 +856,10 @@ pub mod omnireplica {
             }
         }
 
-        pub fn set_peers(&mut self, peers: HashMap<NodeId, ActorRef<Message<TestECEntry>>>) {
+        pub fn set_peers(
+            &mut self,
+            peers: HashMap<NodeId, ActorRef<Message<TestECEntry, ClusterConfigEC>>>,
+        ) {
             self.peers = peers;
         }
 
@@ -907,7 +914,7 @@ pub mod omnireplica {
     }
 
     impl Actor for OmniPaxosComponentEC {
-        type Message = Message<TestECEntry>;
+        type Message = Message<TestECEntry, ClusterConfigEC>;
 
         fn receive_local(&mut self, msg: Self::Message) -> Handled {
             self.paxos.handle_incoming(msg);
@@ -931,6 +938,7 @@ pub mod verification {
     use omnipaxos::{
         storage::{Snapshot, StopSign},
         util::{LogEntry, NodeId},
+        ClusterConfigEC,
     };
 
     use crate::ec::utils::{TestECEntry, TestECEntrySnapshot};
@@ -940,7 +948,10 @@ pub mod verification {
     /// * All entries are decided, verify the decided entries
     /// * Only a snapshot was taken, verify the snapshot
     /// * A snapshot was taken and entries decided on afterwards, verify both the snapshot and entries
-    pub fn verify_log(read_log: Vec<LogEntry<TestECEntry>>, proposals: Vec<TestECEntry>) {
+    pub fn verify_log(
+        read_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>>,
+        proposals: Vec<TestECEntry>,
+    ) {
         let num_proposals = proposals.len();
         match &read_log[..] {
             [LogEntry::Decided(_), ..] => verify_entries(&read_log, &proposals, 0, num_proposals),
@@ -966,7 +977,7 @@ pub mod verification {
 
     /// Verify that the log has a single snapshot of the latest entry.
     pub fn verify_snapshot(
-        read_entries: &[LogEntry<TestECEntry>],
+        read_entries: &[LogEntry<TestECEntry, ClusterConfigEC>],
         exp_compacted_idx: usize,
         exp_snapshot: &TestECEntrySnapshot,
     ) {
@@ -992,7 +1003,7 @@ pub mod verification {
 
     /// Verify that all log entries are decided and matches the proposed entries.
     pub fn verify_entries(
-        read_entries: &[LogEntry<TestECEntry>],
+        read_entries: &[LogEntry<TestECEntry, ClusterConfigEC>],
         exp_entries: &[TestECEntry],
         offset: usize,
         decided_idx: usize,
@@ -1023,7 +1034,10 @@ pub mod verification {
     }
 
     /// Verify that the log entry contains only a stopsign matching `exp_stopsign`
-    pub fn verify_stopsign(read_entries: &[LogEntry<TestECEntry>], exp_stopsign: &StopSign) {
+    pub fn verify_stopsign(
+        read_entries: &[LogEntry<TestECEntry, ClusterConfigEC>],
+        exp_stopsign: &StopSign<ClusterConfigEC>,
+    ) {
         assert_eq!(
             read_entries.len(),
             1,
@@ -1042,7 +1056,7 @@ pub mod verification {
 
     /// Verifies that there is a majority when an entry is proposed.
     pub fn check_quorum(
-        logs: &[(NodeId, Vec<LogEntry<TestECEntry>>)],
+        logs: &[(NodeId, Vec<LogEntry<TestECEntry, ClusterConfigEC>>)],
         quorum_size: usize,
         proposals: &[TestECEntry],
     ) {
@@ -1064,7 +1078,7 @@ pub mod verification {
 
     /// Verifies that only proposed values are decided.
     pub fn check_validity(
-        logs: &[(NodeId, Vec<LogEntry<TestECEntry>>)],
+        logs: &[(NodeId, Vec<LogEntry<TestECEntry, ClusterConfigEC>>)],
         proposals: &[TestECEntry],
     ) {
         logs.iter().for_each(|(_pid, log)| {
@@ -1081,7 +1095,9 @@ pub mod verification {
     }
 
     /// Verifies logs do not diverge. **NOTE**: this check assumes normal execution within one round without any snapshots, trimming.
-    pub fn check_consistent_log_prefixes(logs: &Vec<(NodeId, Vec<LogEntry<TestECEntry>>)>) {
+    pub fn check_consistent_log_prefixes(
+        logs: &Vec<(NodeId, Vec<LogEntry<TestECEntry, ClusterConfigEC>>)>,
+    ) {
         let (_, longest_log) = logs
             .iter()
             .max_by(|(_, sr), (_, other_sr)| sr.len().cmp(&other_sr.len()))

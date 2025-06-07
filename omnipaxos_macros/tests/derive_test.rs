@@ -23,6 +23,6 @@ fn build_op_test() {
         server_config,
     };
 
-    let _omnipaxos: OmniPaxos<TestEntry, MemoryStorage<TestEntry>> =
+    let _omnipaxos: OmniPaxos<TestEntry, MemoryStorage<TestEntry, ClusterConfig>> =
         config.build(MemoryStorage::default()).unwrap();
 }

@@ -13,7 +13,7 @@ struct SyncTest {
     leaders_log: Vec<TestECEntry>,
     leaders_dec_idx: usize,
     leaders_compacted_idx: Option<usize>,
-    leaders_ss: Option<StopSign>,
+    leaders_ss: Option<StopSign<ClusterConfigEC>>,
     followers_log: Vec<TestECEntry>,
     followers_dec_idx: usize,
     followers_compacted_idx: Option<usize>,
@@ -33,7 +33,7 @@ fn ec_sync_full_test() {
     let leaders_dec_idx = 5;
     let leaders_compacted_idx = 2;
     let cluster_config = ClusterConfigEC::default();
-    let mut leaders_ss = StopSign::with(cluster_config.into(), None);
+    let mut leaders_ss = StopSign::<ClusterConfigEC>::with(cluster_config, None);
     leaders_ss.next_config.configuration_id = 2;
     leaders_ss.next_config.nodes = vec![1, 2, 3];
 
@@ -68,7 +68,7 @@ fn ec_sync_decided_ss_test() {
         .collect();
     let leaders_dec_idx = 6;
     let cluster_config = ClusterConfigEC::default();
-    let mut leaders_ss = StopSign::with(cluster_config.into(), None);
+    let mut leaders_ss = StopSign::<ClusterConfigEC>::with(cluster_config, None);
     leaders_ss.next_config.configuration_id = 2;
     leaders_ss.next_config.nodes = vec![1, 2, 3];
 
@@ -97,7 +97,7 @@ fn ec_sync_only_stopsign_test() {
     // Define leader's log
     let leaders_dec_idx = 1;
     let cluster_config = ClusterConfigEC::default();
-    let mut leaders_ss = StopSign::with(cluster_config.into(), None);
+    let mut leaders_ss = StopSign::<ClusterConfigEC>::with(cluster_config, None);
     leaders_ss.next_config.configuration_id = 2;
     leaders_ss.next_config.nodes = vec![1, 2, 3];
 
