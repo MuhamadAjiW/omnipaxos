@@ -1,7 +1,8 @@
 pub mod utils;
 
 use kompact::prelude::{promise, Ask};
-use omnipaxos::{ballot_leader_election::Ballot, util::NodeId};
+use omnipaxos_ec::ballot_leader_election::Ballot;
+use omnipaxos_ec::util::NodeId;
 use rand::Rng;
 use serial_test::serial;
 use utils::{TestConfig, TestSystem, Value};

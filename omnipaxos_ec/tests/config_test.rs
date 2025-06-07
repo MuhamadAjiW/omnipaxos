@@ -1,7 +1,7 @@
 #![cfg(feature = "toml_config")]
 pub mod utils;
 
-use omnipaxos::{util::FlexibleQuorum, OmniPaxosConfig};
+use omnipaxos_ec::{util::FlexibleQuorum, OmniPaxosConfig};
 use omnipaxos_storage::memory_storage::MemoryStorage;
 use serial_test::serial;
 use utils::Value;

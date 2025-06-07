@@ -1,7 +1,7 @@
 pub mod utils;
 
 use kompact::prelude::{promise, Ask, FutureCollection, KFuture};
-use omnipaxos::util::{LogEntry, NodeId};
+use omnipaxos_ec::util::{LogEntry, NodeId};
 use serial_test::serial;
 use std::{thread, time::Duration};
 use utils::{verification::verify_log, StorageType, TestConfig, TestSystem, Value};

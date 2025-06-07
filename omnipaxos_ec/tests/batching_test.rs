@@ -1,7 +1,7 @@
 pub mod utils;
 
 use kompact::prelude::{promise, Ask, FutureCollection};
-use omnipaxos::ballot_leader_election::Ballot;
+use omnipaxos_ec::ballot_leader_election::Ballot;
 use serial_test::serial;
 use std::{thread, time::Duration};
 use utils::{TestConfig, TestSystem};

@@ -2,12 +2,10 @@ pub mod utils;
 
 use crate::utils::STOPSIGN_ID;
 use kompact::prelude::{promise, Ask};
-use omnipaxos::{
-    messages::{sequence_paxos::PaxosMsg, Message},
-    storage::StopSign,
-    util::{LogEntry, NodeId, SequenceNumber},
-    ClusterConfig,
-};
+use omnipaxos_ec::messages::{sequence_paxos::PaxosMsg, Message};
+use omnipaxos_ec::storage::StopSign;
+use omnipaxos_ec::util::{LogEntry, NodeId, SequenceNumber};
+use omnipaxos_ec::ClusterConfig;
 use serial_test::serial;
 use std::{thread, time::Duration};
 use utils::{

@@ -1,6 +1,6 @@
 pub mod utils;
 
-use omnipaxos::util::NodeId;
+use omnipaxos_ec::util::NodeId;
 use serial_test::serial;
 use std::thread;
 use utils::{verification::verify_log, TestConfig, TestSystem, Value};
