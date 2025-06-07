@@ -40,7 +40,7 @@ where
             };
             self.leader_state.set_promise(my_promise, self.pid, true);
             /* initialise longest chosen sequence and update state */
-            self.state = (Role::Leader, Phase::Prepare);
+            self.state = (RoleEC::Leader, PhaseEC::Prepare);
             let prep = Prepare {
                 n,
                 decided_idx,
@@ -61,13 +61,13 @@ where
     }
 
     pub(crate) fn become_follower(&mut self) {
-        self.state.0 = Role::Follower;
+        self.state.0 = RoleEC::Follower;
     }
 
     pub(crate) fn handle_preparereq(&mut self, prepreq: PrepareReq, from: NodeId) {
         #[cfg(feature = "logging")]
         debug!(self.logger, "Incoming message PrepareReq from {}", from);
-        if self.state.0 == Role::Leader && prepreq.n <= self.leader_state.n_leader {
+        if self.state.0 == RoleEC::Leader && prepreq.n <= self.leader_state.n_leader {
             self.leader_state.reset_promise(from);
             self.leader_state.set_latest_accept_meta(from, None);
             self.send_prepare(from);
@@ -77,8 +77,8 @@ where
     pub(crate) fn handle_forwarded_proposal(&mut self, mut entries: Vec<T>) {
         if !self.accepted_reconfiguration() {
             match self.state {
-                (Role::Leader, Phase::Prepare) => self.buffered_proposals.append(&mut entries),
-                (Role::Leader, Phase::Accept) => self.accept_entries_leader(entries),
+                (RoleEC::Leader, PhaseEC::Prepare) => self.buffered_proposals.append(&mut entries),
+                (RoleEC::Leader, PhaseEC::Accept) => self.accept_entries_leader(entries),
                 _ => self.forward_proposals(entries),
             }
         }
@@ -89,8 +89,8 @@ where
             return;
         }
         match self.state {
-            (Role::Leader, Phase::Prepare) => self.buffered_stopsign = Some(ss),
-            (Role::Leader, Phase::Accept) => self.accept_stopsign_leader(ss),
+            (RoleEC::Leader, PhaseEC::Prepare) => self.buffered_stopsign = Some(ss),
+            (RoleEC::Leader, PhaseEC::Accept) => self.accept_stopsign_leader(ss),
             _ => self.forward_stopsign(ss),
         }
     }
@@ -277,7 +277,7 @@ where
                 new_accepted_idx = self.internal_storage.get_accepted_idx();
             }
         }
-        self.state = (Role::Leader, Phase::Accept);
+        self.state = (RoleEC::Leader, PhaseEC::Accept);
         self.leader_state
             .set_accepted_idx(self.pid, new_accepted_idx);
         for pid in self.leader_state.get_promised_followers() {
@@ -324,7 +324,9 @@ where
             self.internal_storage.get_decided_idx(),
             self.leader_state.accepted_indexes
         );
-        if accepted.n == self.leader_state.n_leader && self.state == (Role::Leader, Phase::Accept) {
+        if accepted.n == self.leader_state.n_leader
+            && self.state == (RoleEC::Leader, PhaseEC::Accept)
+        {
             self.leader_state
                 .set_accepted_idx(from, accepted.accepted_idx);
             if accepted.accepted_idx > self.internal_storage.get_decided_idx()
@@ -364,21 +366,21 @@ where
     }
 
     pub(crate) fn handle_notaccepted(&mut self, not_acc: NotAccepted, from: NodeId) {
-        if self.state.0 == Role::Leader && self.leader_state.n_leader < not_acc.n {
+        if self.state.0 == RoleEC::Leader && self.leader_state.n_leader < not_acc.n {
             self.leader_state.lost_promise(from);
         }
     }
 
     pub(crate) fn resend_messages_leader(&mut self) {
         match self.state.1 {
-            Phase::Prepare => {
+            PhaseEC::Prepare => {
                 // Resend Prepare
                 let preparable_peers = self.leader_state.get_preparable_peers(&self.peers);
                 for peer in preparable_peers {
                     self.send_prepare(peer);
                 }
             }
-            Phase::Accept => {
+            PhaseEC::Accept => {
                 // Resend AcceptStopSign or StopSign's decide
                 if let Some(ss) = self.internal_storage.get_stopsign() {
                     let decided_idx = self.internal_storage.get_decided_idx();
@@ -398,8 +400,8 @@ where
                     self.send_prepare(peer);
                 }
             }
-            Phase::Recover => (),
-            Phase::None => (),
+            PhaseEC::Recover => (),
+            PhaseEC::None => (),
         }
     }
 

@@ -4,6 +4,7 @@ use crate::utils::logger::create_logger;
 use crate::{
     erasure::{ec_service::ECService, log_entry::ECEntry},
     messages::Message,
+    sequence_paxos::{Phase, Role},
     storage::{
         internal_storage::{InternalStorage, InternalStorageConfig},
         Snapshot, StopSign, Storage,
@@ -11,7 +12,7 @@ use crate::{
     util::{
         FlexibleQuorum, LogSync, NodeId, Quorum, SequenceNumber, READ_ERROR_MSG, WRITE_ERROR_MSG,
     },
-    ClusterConfig, CompactionErr, OmniPaxosConfig, ProposeErr,
+    ClusterConfigEC, CompactionErrEC, OmniPaxosECConfig, ProposeErrEC,
 };
 #[cfg(feature = "logging")]
 use slog::{debug, info, trace, warn, Logger};
@@ -31,7 +32,7 @@ where
     pub(crate) internal_storage: InternalStorage<B, T>,
     pid: NodeId,
     peers: Vec<NodeId>, // excluding self pid
-    state: (Role, Phase),
+    state: (RoleEC, PhaseEC),
     buffered_proposals: Vec<T>,
     buffered_stopsign: Option<StopSign>,
     outgoing: Vec<Message<T>>,
@@ -68,7 +69,7 @@ where
         {
             // if we recover a promise from storage then we must do failure recovery
             Some(b) => {
-                let state = (Role::Follower, Phase::Recover);
+                let state = (RoleEC::Follower, PhaseEC::Recover);
                 for peer_pid in &peers {
                     let prepreq = PrepareReq { n: b };
                     outgoing.push(Message::SequencePaxos(PaxosMessage {
@@ -79,7 +80,7 @@ where
                 }
                 (state, b)
             }
-            None => ((Role::Follower, Phase::None), Ballot::default()),
+            None => ((RoleEC::Follower, PhaseEC::None), Ballot::default()),
         };
         let internal_storage_config = InternalStorageConfig {
             batch_size: config.batch_size,
@@ -132,7 +133,7 @@ where
         paxos
     }
 
-    pub(crate) fn get_state(&self) -> &(Role, Phase) {
+    pub(crate) fn get_state(&self) -> &(RoleEC, PhaseEC) {
         &self.state
     }
 
@@ -143,9 +144,9 @@ where
     /// Initiates the trim process.
     /// # Arguments
     /// * `trim_idx` - Deletes all entries up to [`trim_idx`], if the [`trim_idx`] is `None` then the minimum index accepted by **ALL** servers will be used as the [`trim_idx`].
-    pub(crate) fn trim(&mut self, trim_idx: Option<usize>) -> Result<(), CompactionErr> {
+    pub(crate) fn trim(&mut self, trim_idx: Option<usize>) -> Result<(), CompactionErrEC> {
         match self.state {
-            (Role::Leader, _) => {
+            (RoleEC::Leader, _) => {
                 let min_all_accepted_idx = self.leader_state.get_min_all_accepted_idx();
                 let trimmed_idx = match trim_idx {
                     Some(idx) if idx <= *min_all_accepted_idx => idx,
@@ -159,7 +160,7 @@ where
                         *min_all_accepted_idx
                     }
                     _ => {
-                        return Err(CompactionErr::NotAllDecided(*min_all_accepted_idx));
+                        return Err(CompactionErrEC::NotAllDecided(*min_all_accepted_idx));
                     }
                 };
                 let result = self.internal_storage.try_trim(trimmed_idx);
@@ -178,7 +179,7 @@ where
                         .expect("storage error while trying to trim log")
                 })
             }
-            _ => Err(CompactionErr::NotCurrentLeader(self.get_current_leader())),
+            _ => Err(CompactionErrEC::NotCurrentLeader(self.get_current_leader())),
         }
     }
 
@@ -190,7 +191,7 @@ where
         &mut self,
         idx: Option<usize>,
         local_only: bool,
-    ) -> Result<(), CompactionErr> {
+    ) -> Result<(), CompactionErrEC> {
         let result = self.internal_storage.try_snapshot(idx);
         if !local_only && result.is_ok() {
             // since it is decided, it is ok even for a follower to send this
@@ -236,16 +237,16 @@ where
     /// StopSign's Decide message has been received so we always resend to be safe.
     pub(crate) fn resend_message_timeout(&mut self) {
         match self.state.0 {
-            Role::Leader => self.resend_messages_leader(),
-            Role::Follower => self.resend_messages_follower(),
+            RoleEC::Leader => self.resend_messages_leader(),
+            RoleEC::Follower => self.resend_messages_follower(),
         }
     }
 
     /// Flushes any batched log entries and sends their corresponding Accept or Accepted messages.
     pub(crate) fn flush_batch_timeout(&mut self) {
         match self.state {
-            (Role::Leader, Phase::Accept) => self.flush_batch_leader(),
-            (Role::Follower, Phase::Accept) => self.flush_batch_follower(),
+            (RoleEC::Leader, PhaseEC::Accept) => self.flush_batch_leader(),
+            (RoleEC::Follower, PhaseEC::Accept) => self.flush_batch_follower(),
             _ => (),
         }
     }
@@ -270,8 +271,8 @@ where
             PaxosMsg::PrepareReq(prepreq) => self.handle_preparereq(prepreq, m.from),
             PaxosMsg::Prepare(prep) => self.handle_prepare(prep, m.from),
             PaxosMsg::Promise(prom) => match &self.state {
-                (Role::Leader, Phase::Prepare) => self.handle_promise_prepare(prom, m.from),
-                (Role::Leader, Phase::Accept) => self.handle_promise_accept(prom, m.from),
+                (RoleEC::Leader, PhaseEC::Prepare) => self.handle_promise_prepare(prom, m.from),
+                (RoleEC::Leader, PhaseEC::Accept) => self.handle_promise_accept(prom, m.from),
                 _ => {}
             },
             PaxosMsg::AcceptSync(acc_sync) => self.handle_acceptsync(acc_sync, m.from),
@@ -300,9 +301,9 @@ where
     }
 
     /// Append an entry to the replicated log.
-    pub(crate) fn append(&mut self, entry: T) -> Result<(), ProposeErr<T>> {
+    pub(crate) fn append(&mut self, entry: T) -> Result<(), ProposeErrEC<T>> {
         if self.accepted_reconfiguration() {
-            Err(ProposeErr::PendingReconfigEntry(entry))
+            Err(ProposeErrEC::PendingReconfigEntry(entry))
         } else {
             self.propose_entry(entry);
             Ok(())
@@ -314,21 +315,21 @@ where
     /// `metadata` is optional data to commit alongside the reconfiguration.
     pub(crate) fn reconfigure(
         &mut self,
-        new_config: ClusterConfig,
+        new_config: ClusterConfigEC,
         metadata: Option<Vec<u8>>,
-    ) -> Result<(), ProposeErr<T>> {
+    ) -> Result<(), ProposeErrEC<T>> {
         if self.accepted_reconfiguration() {
-            return Err(ProposeErr::PendingReconfigConfig(new_config, metadata));
+            return Err(ProposeErrEC::PendingReconfigConfig(new_config, metadata));
         }
         #[cfg(feature = "logging")]
         info!(
             self.logger,
             "Accepting reconfiguration {:?}", new_config.nodes
         );
-        let ss = StopSign::with(new_config, metadata);
+        let ss = StopSign::with(new_config.into(), metadata);
         match self.state {
-            (Role::Leader, Phase::Prepare) => self.buffered_stopsign = Some(ss),
-            (Role::Leader, Phase::Accept) => self.accept_stopsign_leader(ss),
+            (RoleEC::Leader, PhaseEC::Prepare) => self.buffered_stopsign = Some(ss),
+            (RoleEC::Leader, PhaseEC::Accept) => self.accept_stopsign_leader(ss),
             _ => self.forward_stopsign(ss),
         }
         Ok(())
@@ -344,7 +345,7 @@ where
         if pid == self.pid {
             return;
         } else if pid == self.get_current_leader() {
-            self.state = (Role::Follower, Phase::Recover);
+            self.state = (RoleEC::Follower, PhaseEC::Recover);
         }
         let prepreq = PrepareReq {
             n: self.get_promise(),
@@ -358,8 +359,8 @@ where
 
     fn propose_entry(&mut self, entry: T) {
         match self.state {
-            (Role::Leader, Phase::Prepare) => self.buffered_proposals.push(entry),
-            (Role::Leader, Phase::Accept) => self.accept_entry_leader(entry),
+            (RoleEC::Leader, PhaseEC::Prepare) => self.buffered_proposals.push(entry),
+            (RoleEC::Leader, PhaseEC::Accept) => self.accept_entry_leader(entry),
             _ => self.forward_proposals(vec![entry]),
         }
     }
@@ -437,18 +438,38 @@ where
     }
 }
 
-#[derive(PartialEq, Debug)]
-pub(crate) enum Phase {
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub(crate) enum PhaseEC {
     Prepare,
     Accept,
     Recover,
     None,
 }
 
-#[derive(PartialEq, Debug)]
-pub(crate) enum Role {
+impl From<PhaseEC> for Phase {
+    fn from(phase: PhaseEC) -> Self {
+        match phase {
+            PhaseEC::Prepare => Phase::Prepare,
+            PhaseEC::Accept => Phase::Accept,
+            PhaseEC::Recover => Phase::Recover,
+            PhaseEC::None => Phase::None,
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub(crate) enum RoleEC {
     Follower,
     Leader,
+}
+
+impl From<RoleEC> for Role {
+    fn from(role: RoleEC) -> Self {
+        match role {
+            RoleEC::Follower => Role::Follower,
+            RoleEC::Leader => Role::Leader,
+        }
+    }
 }
 
 /// Configuration for `SequencePaxos`.
@@ -474,8 +495,8 @@ pub(crate) struct SequencePaxosConfigEC {
     erasure_coding_service: Option<ECService>,
 }
 
-impl From<OmniPaxosConfig> for SequencePaxosConfigEC {
-    fn from(config: OmniPaxosConfig) -> Self {
+impl From<OmniPaxosECConfig> for SequencePaxosConfigEC {
+    fn from(config: OmniPaxosECConfig) -> Self {
         let pid = config.server_config.pid;
         let peers = config
             .cluster_config

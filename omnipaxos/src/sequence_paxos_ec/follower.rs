@@ -12,14 +12,14 @@ where
     /*** Follower ***/
     pub(crate) fn handle_prepare(&mut self, prep: Prepare, from: NodeId) {
         let old_promise = self.internal_storage.get_promise();
-        if old_promise < prep.n || (old_promise == prep.n && self.state.1 == Phase::Recover) {
+        if old_promise < prep.n || (old_promise == prep.n && self.state.1 == PhaseEC::Recover) {
             // Flush any pending writes
             // Don't have to handle flushed entries here because we will sync with followers
             let _ = self.internal_storage.flush_batch().expect(WRITE_ERROR_MSG);
             self.internal_storage
                 .set_promise(prep.n)
                 .expect(WRITE_ERROR_MSG);
-            self.state = (Role::Follower, Phase::Prepare);
+            self.state = (RoleEC::Follower, PhaseEC::Prepare);
             self.current_seq_num = SequenceNumber::default();
             let na = self.internal_storage.get_accepted_round();
             let accepted_idx = self.internal_storage.get_accepted_idx();
@@ -51,7 +51,8 @@ where
     }
 
     pub(crate) fn handle_acceptsync(&mut self, accsync: AcceptSync<T>, from: NodeId) {
-        if self.check_valid_ballot(accsync.n) && self.state == (Role::Follower, Phase::Prepare) {
+        if self.check_valid_ballot(accsync.n) && self.state == (RoleEC::Follower, PhaseEC::Prepare)
+        {
             self.cached_promise_message = None;
             let new_accepted_idx = self
                 .internal_storage
@@ -64,7 +65,7 @@ where
                 n: accsync.n,
                 accepted_idx: new_accepted_idx,
             };
-            self.state = (Role::Follower, Phase::Accept);
+            self.state = (RoleEC::Follower, PhaseEC::Accept);
             self.current_seq_num = accsync.seq_num;
             let cached_idx = self.outgoing.len();
             self.latest_accepted_meta = Some((accsync.n, cached_idx));
@@ -87,7 +88,7 @@ where
 
     pub(crate) fn handle_acceptdecide(&mut self, acc_dec: AcceptDecide<T>) {
         if self.check_valid_ballot(acc_dec.n)
-            && self.state == (Role::Follower, Phase::Accept)
+            && self.state == (RoleEC::Follower, PhaseEC::Accept)
             && self.handle_sequence_num(acc_dec.seq_num, acc_dec.n.pid) == MessageStatus::Expected
         {
             #[cfg(not(feature = "unicache"))]
@@ -111,7 +112,7 @@ where
 
     pub(crate) fn handle_accept_stopsign(&mut self, acc_ss: AcceptStopSign) {
         if self.check_valid_ballot(acc_ss.n)
-            && self.state == (Role::Follower, Phase::Accept)
+            && self.state == (RoleEC::Follower, PhaseEC::Accept)
             && self.handle_sequence_num(acc_ss.seq_num, acc_ss.n.pid) == MessageStatus::Expected
         {
             // Flush entries before appending stopsign. The accepted index is ignored here as
@@ -127,7 +128,7 @@ where
 
     pub(crate) fn handle_decide(&mut self, dec: Decide) {
         if self.check_valid_ballot(dec.n)
-            && self.state.1 == Phase::Accept
+            && self.state.1 == PhaseEC::Accept
             && self.handle_sequence_num(dec.seq_num, dec.n.pid) == MessageStatus::Expected
         {
             let new_accepted_idx = self.update_decided_idx_and_get_accepted_idx(dec.decided_idx);
@@ -239,7 +240,7 @@ where
 
     pub(crate) fn resend_messages_follower(&mut self) {
         match self.state.1 {
-            Phase::Prepare => {
+            PhaseEC::Prepare => {
                 // Resend Promise
                 match &self.cached_promise_message {
                     Some(promise) => {
@@ -254,17 +255,17 @@ where
                         // cached the promise sent as a response to the prepare
                         #[cfg(feature = "logging")]
                         warn!(self.logger, "In Prepare phase without a cached promise!");
-                        self.state = (Role::Follower, Phase::Recover);
+                        self.state = (RoleEC::Follower, PhaseEC::Recover);
                         self.send_preparereq_to_all_peers();
                     }
                 }
             }
-            Phase::Recover => {
+            PhaseEC::Recover => {
                 // Resend PrepareReq
                 self.send_preparereq_to_all_peers();
             }
-            Phase::Accept => (),
-            Phase::None => (),
+            PhaseEC::Accept => (),
+            PhaseEC::None => (),
         }
     }
 

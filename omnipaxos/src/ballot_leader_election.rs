@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use crate::{
     sequence_paxos::{Phase, Role},
     util::{defaults::*, ConfigurationId, FlexibleQuorum, Quorum},
+    OmniPaxosECConfig,
 };
 
 #[cfg(feature = "logging")]
@@ -325,6 +326,32 @@ pub(crate) struct BLEConfig {
 
 impl From<OmniPaxosConfig> for BLEConfig {
     fn from(config: OmniPaxosConfig) -> Self {
+        let pid = config.server_config.pid;
+        let peers = config
+            .cluster_config
+            .nodes
+            .into_iter()
+            .filter(|x| *x != pid)
+            .collect();
+
+        Self {
+            configuration_id: config.cluster_config.configuration_id,
+            pid,
+            peers,
+            priority: config.server_config.leader_priority,
+            flexible_quorum: config.cluster_config.flexible_quorum,
+            buffer_size: BLE_BUFFER_SIZE,
+            #[cfg(feature = "logging")]
+            logger_file_path: config.server_config.logger_file_path,
+            #[cfg(feature = "logging")]
+            custom_logger: config.server_config.custom_logger,
+        }
+    }
+}
+
+// EC Functions
+impl From<OmniPaxosECConfig> for BLEConfig {
+    fn from(config: OmniPaxosECConfig) -> Self {
         let pid = config.server_config.pid;
         let peers = config
             .cluster_config

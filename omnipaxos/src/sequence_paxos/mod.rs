@@ -2,7 +2,6 @@ use super::{ballot_leader_election::Ballot, messages::sequence_paxos::*, util::L
 #[cfg(feature = "logging")]
 use crate::utils::logger::create_logger;
 use crate::{
-    erasure::{ec_service::ECService, log_entry::ECEntry},
     messages::Message,
     storage::{
         internal_storage::{InternalStorage, InternalStorageConfig},
@@ -467,7 +466,6 @@ pub(crate) struct SequencePaxosConfig {
     logger_file_path: Option<String>,
     #[cfg(feature = "logging")]
     custom_logger: Option<Logger>,
-    erasure_coding_service: Option<ECService>,
 }
 
 impl From<OmniPaxosConfig> for SequencePaxosConfig {
@@ -489,7 +487,6 @@ impl From<OmniPaxosConfig> for SequencePaxosConfig {
             logger_file_path: config.server_config.logger_file_path,
             #[cfg(feature = "logging")]
             custom_logger: config.server_config.custom_logger,
-            erasure_coding_service: config.server_config.erasure_coding_service,
         }
     }
 }

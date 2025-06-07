@@ -1,14 +1,16 @@
 use crate::{
     ballot_leader_election::{Ballot, BallotLeaderElection},
+    erasure::{ec_service::ECService, log_entry::ECEntry},
     errors::{valid_config, ConfigError},
     messages::Message,
-    sequence_paxos::{Phase, SequencePaxos},
-    storage::{Entry, StopSign, Storage},
+    sequence_paxos_ec::{PhaseEC, SequencePaxosEC},
+    storage::{StopSign, Storage},
     util::{
         defaults::{BUFFER_SIZE, ELECTION_TIMEOUT, FLUSH_BATCH_TIMEOUT, RESEND_MESSAGE_TIMEOUT},
         ConfigurationId, FlexibleQuorum, LogEntry, LogicalClock, NodeId,
     },
     utils::ui::{self, ClusterState},
+    ClusterConfig, OmniPaxosConfig, ServerConfig,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "toml_config")]
@@ -28,12 +30,21 @@ use toml;
 #[allow(missing_docs)]
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "toml_config", derive(Deserialize), serde(default))]
-pub struct OmniPaxosConfig {
-    pub cluster_config: ClusterConfig,
-    pub server_config: ServerConfig,
+pub struct OmniPaxosECConfig {
+    pub cluster_config: ClusterConfigEC,
+    pub server_config: ServerConfigEC,
 }
 
-impl OmniPaxosConfig {
+impl From<OmniPaxosECConfig> for OmniPaxosConfig {
+    fn from(ec: OmniPaxosECConfig) -> Self {
+        OmniPaxosConfig {
+            cluster_config: ec.cluster_config.into(),
+            server_config: ec.server_config.into(),
+        }
+    }
+}
+
+impl OmniPaxosECConfig {
     /// Checks that all the fields of the cluster config are valid.
     pub fn validate(&self) -> Result<(), ConfigError> {
         self.cluster_config.validate()?;
@@ -49,15 +60,15 @@ impl OmniPaxosConfig {
     #[cfg(feature = "toml_config")]
     pub fn with_toml(file_path: &str) -> Result<Self, ConfigError> {
         let config_file = fs::read_to_string(file_path)?;
-        let config: OmniPaxosConfig = toml::from_str(&config_file)?;
+        let config: OmniPaxosECConfig = toml::from_str(&config_file)?;
         config.validate()?;
         Ok(config)
     }
 
     /// Checks all configuration fields and returns the local OmniPaxos node if successful.
-    pub fn build<T, B>(self, storage: B) -> Result<OmniPaxos<T, B>, ConfigError>
+    pub fn build<T, B>(self, storage: B) -> Result<OmniPaxosEC<T, B>, ConfigError>
     where
-        T: Entry,
+        T: ECEntry,
         B: Storage<T>,
     {
         self.validate()?;
@@ -65,14 +76,14 @@ impl OmniPaxosConfig {
         let recovered_leader = storage
             .get_promise()
             .expect("storage error while trying to read promise");
-        Ok(OmniPaxos {
+        Ok(OmniPaxosEC {
             ble: BallotLeaderElection::with(self.clone().into(), recovered_leader),
             election_clock: LogicalClock::with(self.server_config.election_tick_timeout),
             resend_message_clock: LogicalClock::with(
                 self.server_config.resend_message_tick_timeout,
             ),
             flush_batch_clock: LogicalClock::with(self.server_config.flush_batch_tick_timeout),
-            seq_paxos: SequencePaxos::with(self.into(), storage),
+            seq_paxos: SequencePaxosEC::with(self.into(), storage),
         })
     }
 }
@@ -84,7 +95,7 @@ impl OmniPaxosConfig {
 /// * `flexible_quorum` : Defines read and write quorum sizes. Can be used for different latency vs fault tolerance tradeoffs.
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "toml_config", serde(default))]
-pub struct ClusterConfig {
+pub struct ClusterConfigEC {
     /// The identifier for the cluster configuration that this OmniPaxos server is part of. Must
     /// not be 0 and be greater than the previous configuration's id.
     pub configuration_id: ConfigurationId,
@@ -94,7 +105,17 @@ pub struct ClusterConfig {
     pub flexible_quorum: Option<FlexibleQuorum>,
 }
 
-impl ClusterConfig {
+impl From<ClusterConfigEC> for ClusterConfig {
+    fn from(ec: ClusterConfigEC) -> Self {
+        ClusterConfig {
+            configuration_id: ec.configuration_id,
+            nodes: ec.nodes,
+            flexible_quorum: ec.flexible_quorum,
+        }
+    }
+}
+
+impl ClusterConfigEC {
     /// Checks that all the fields of the cluster config are valid.
     pub fn validate(&self) -> Result<(), ConfigError> {
         let num_nodes = self.nodes.len();
@@ -129,14 +150,14 @@ impl ClusterConfig {
     /// node defined in `server_config` and using storage `with_storage`.
     pub fn build_for_server<T, B>(
         self,
-        server_config: ServerConfig,
+        server_config: ServerConfigEC,
         with_storage: B,
-    ) -> Result<OmniPaxos<T, B>, ConfigError>
+    ) -> Result<OmniPaxosEC<T, B>, ConfigError>
     where
-        T: Entry,
+        T: ECEntry,
         B: Storage<T>,
     {
-        let op_config = OmniPaxosConfig {
+        let op_config = OmniPaxosECConfig {
             cluster_config: self,
             server_config,
         };
@@ -155,7 +176,7 @@ impl ClusterConfig {
 /// * `leader_priority` : Custom priority for this node to be elected as the leader.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "toml_config", derive(Deserialize), serde(default))]
-pub struct ServerConfig {
+pub struct ServerConfigEC {
     /// The unique identifier of this node. Must not be 0.
     pub pid: NodeId,
     /// The number of calls to `tick()` before leader election is updated. If this is set to 5 and `tick()` is called every 10ms, then the election timeout will be 50ms.
@@ -177,9 +198,29 @@ pub struct ServerConfig {
     #[cfg(feature = "logging")]
     #[cfg_attr(feature = "toml_config", serde(skip_deserializing))]
     pub custom_logger: Option<slog::Logger>,
+    /// Erasure coding service configuration
+    pub erasure_coding_service: Option<ECService>,
 }
 
-impl ServerConfig {
+impl From<ServerConfigEC> for ServerConfig {
+    fn from(ec: ServerConfigEC) -> Self {
+        ServerConfig {
+            pid: ec.pid,
+            election_tick_timeout: ec.election_tick_timeout,
+            resend_message_tick_timeout: ec.resend_message_tick_timeout,
+            buffer_size: ec.buffer_size,
+            batch_size: ec.batch_size,
+            flush_batch_tick_timeout: ec.flush_batch_tick_timeout,
+            leader_priority: ec.leader_priority,
+            #[cfg(feature = "logging")]
+            logger_file_path: ec.logger_file_path,
+            #[cfg(feature = "logging")]
+            custom_logger: ec.custom_logger,
+        }
+    }
+}
+
+impl ServerConfigEC {
     /// Checks that all the fields of the server config are valid.
     pub fn validate(&self) -> Result<(), ConfigError> {
         valid_config!(self.pid != 0, "Server pid cannot be 0");
@@ -197,7 +238,7 @@ impl ServerConfig {
     }
 }
 
-impl Default for ServerConfig {
+impl Default for ServerConfigEC {
     fn default() -> Self {
         Self {
             pid: 0,
@@ -211,33 +252,34 @@ impl Default for ServerConfig {
             logger_file_path: None,
             #[cfg(feature = "logging")]
             custom_logger: None,
+            erasure_coding_service: None,
         }
     }
 }
 
 /// The `OmniPaxos` struct represents an OmniPaxos server. Maintains the replicated log that can be read from and appended to.
 /// It also handles incoming messages and produces outgoing messages that you need to fetch and send periodically using your own network implementation.
-pub struct OmniPaxos<T, B>
+pub struct OmniPaxosEC<T, B>
 where
-    T: Entry,
+    T: ECEntry,
     B: Storage<T>,
 {
-    seq_paxos: SequencePaxos<T, B>,
+    seq_paxos: SequencePaxosEC<T, B>,
     ble: BallotLeaderElection,
     election_clock: LogicalClock,
     resend_message_clock: LogicalClock,
     flush_batch_clock: LogicalClock,
 }
 
-impl<T, B> OmniPaxos<T, B>
+impl<T, B> OmniPaxosEC<T, B>
 where
-    T: Entry,
+    T: ECEntry,
     B: Storage<T>,
 {
     /// Initiates the trim process.
     /// # Arguments
     /// * `trim_index` - Deletes all entries up to [`trim_index`], if the [`trim_index`] is `None` then the minimum index accepted by **ALL** servers will be used as the [`trim_index`].
-    pub fn trim(&mut self, trim_index: Option<usize>) -> Result<(), CompactionErr> {
+    pub fn trim(&mut self, trim_index: Option<usize>) -> Result<(), CompactionErrEC> {
         self.seq_paxos.trim(trim_index)
     }
 
@@ -249,7 +291,7 @@ where
         &mut self,
         compact_idx: Option<usize>,
         local_only: bool,
-    ) -> Result<(), CompactionErr> {
+    ) -> Result<(), CompactionErrEC> {
         self.seq_paxos.snapshot(compact_idx, local_only)
     }
 
@@ -274,7 +316,7 @@ where
         if promised_pid == 0 {
             None
         } else {
-            let is_accepted = self.seq_paxos.get_state().1 == Phase::Accept;
+            let is_accepted = self.seq_paxos.get_state().1 == PhaseEC::Accept;
             Some((promised_pid, is_accepted))
         }
     }
@@ -336,7 +378,7 @@ where
     }
 
     /// Append an entry to the replicated log.
-    pub fn append(&mut self, entry: T) -> Result<(), ProposeErr<T>> {
+    pub fn append(&mut self, entry: T) -> Result<(), ProposeErrEC<T>> {
         self.seq_paxos.append(entry)
     }
 
@@ -346,11 +388,11 @@ where
     /// `metadata` is optional data to commit alongside the reconfiguration.
     pub fn reconfigure(
         &mut self,
-        new_configuration: ClusterConfig,
+        new_configuration: ClusterConfigEC,
         metadata: Option<Vec<u8>>,
-    ) -> Result<(), ProposeErr<T>> {
+    ) -> Result<(), ProposeErrEC<T>> {
         if let Err(config_error) = new_configuration.validate() {
-            return Err(ProposeErr::ConfigError(
+            return Err(ProposeErrEC::ConfigError(
                 config_error,
                 new_configuration,
                 metadata,
@@ -401,9 +443,12 @@ where
     /// It is also used for the election process, where the server checks if it can become the leader.
     /// For instance if `election_timeout()` is called every 100ms, then if the leader fails, the servers will detect it after 100ms and elect a new server after another 100ms if possible.
     fn election_timeout(&mut self) {
+        let (role_ec, phase_ec) = self.seq_paxos.get_state();
+        let role = (*role_ec).into();
+        let phase = (*phase_ec).into();
         if let Some(new_leader) = self
             .ble
-            .hb_timeout(self.seq_paxos.get_state(), self.seq_paxos.get_promise())
+            .hb_timeout(&(role, phase), self.seq_paxos.get_promise())
         {
             self.seq_paxos.handle_leader(new_leader);
         }
@@ -427,23 +472,23 @@ where
 /// An error indicating a failed proposal due to the current cluster configuration being already stopped
 /// or due to an invalid proposed configuration. Returns the failed proposal.
 #[derive(Debug)]
-pub enum ProposeErr<T>
+pub enum ProposeErrEC<T>
 where
-    T: Entry,
+    T: ECEntry,
 {
     /// Couldn't propose entry because a reconfiguration is pending. Returns the failed, proposed entry.
     PendingReconfigEntry(T),
     /// Couldn't propose reconfiguration because a reconfiguration is already pending. Returns the failed, proposed `ClusterConfig` and the metadata.
     /// cluster config and metadata.
-    PendingReconfigConfig(ClusterConfig, Option<Vec<u8>>),
+    PendingReconfigConfig(ClusterConfigEC, Option<Vec<u8>>),
     /// Couldn't propose reconfiguration because of an invalid cluster config. Contains the config
     /// error and the failed, proposed cluster config and metadata.
-    ConfigError(ConfigError, ClusterConfig, Option<Vec<u8>>),
+    ConfigError(ConfigError, ClusterConfigEC, Option<Vec<u8>>),
 }
 
 /// An error returning the proposal that was failed due to that the current configuration is stopped.
 #[derive(Copy, Clone, Debug)]
-pub enum CompactionErr {
+pub enum CompactionErrEC {
     /// Snapshot was called with an index that is not decided yet. Returns the currently decided index.
     UndecidedIndex(usize),
     /// Snapshot was called with an index which is already trimmed. Returns the currently compacted index.
@@ -454,8 +499,8 @@ pub enum CompactionErr {
     NotCurrentLeader(NodeId),
 }
 
-impl Error for CompactionErr {}
-impl Display for CompactionErr {
+impl Error for CompactionErrEC {}
+impl Display for CompactionErrEC {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(self, f)
     }
