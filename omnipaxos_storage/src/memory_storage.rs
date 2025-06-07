@@ -93,6 +93,9 @@ where
     }
 
     fn get_entries(&self, from: usize, to: usize) -> StorageResult<Vec<T>> {
+        if from < self.trimmed_idx || to < self.trimmed_idx || from > to {
+            return Ok(vec![]);
+        }
         let from = from - self.trimmed_idx;
         let to = to - self.trimmed_idx;
         Ok(self.log.get(from..to).unwrap_or(&[]).to_vec())
