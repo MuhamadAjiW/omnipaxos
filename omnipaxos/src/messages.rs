@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// Internal component for log replication
 pub mod sequence_paxos {
+    use crate::storage::LogEntry;
     use crate::{
         ballot_leader_election::Ballot,
         storage::{Entry, StopSign},
@@ -177,6 +178,105 @@ pub mod sequence_paxos {
         pub to: NodeId,
         /// The message content.
         pub msg: PaxosMsg<T>,
+    }
+
+    /// Erasure coded AcceptDecide message
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct AcceptDecideEC {
+        /// The current round.
+        pub n: Ballot,
+        /// The sequence number of this message in the leader-to-follower accept sequence
+        pub seq_num: SequenceNumber,
+        /// The decided index.
+        pub decided_idx: usize,
+        /// Entries to be replicated, encoded as erasure-coded fragments.
+        pub entries: Vec<LogEntry>,
+    }
+
+    /// Erasure coded Promise message
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct PromiseEC {
+        /// The current round.
+        pub n: Ballot,
+        /// The latest round in which an entry was accepted.
+        pub n_accepted: Ballot,
+        /// The decided index of this follower.
+        pub decided_idx: usize,
+        /// The log length of this follower.
+        pub accepted_idx: usize,
+        /// The log update which the leader applies to its log in order to sync
+        pub log_sync: Option<LogSyncEC>,
+    }
+
+    /// Erasure coded AcceptSync message
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct AcceptSyncEC {
+        /// The current round.
+        pub n: Ballot,
+        /// The sequence number of this message in the leader-to-follower accept sequence
+        pub seq_num: SequenceNumber,
+        /// The decided index of this leader.
+        pub decided_idx: usize,
+        /// The log update which the follower applies to its log in order to sync
+        pub log_sync: LogSyncEC,
+    }
+
+    /// Erasure coded Paxos message variants
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub enum PaxosMsgEC {
+        /// Accept decide with erasure-coded entries.
+        AcceptDecideEC(AcceptDecideEC),
+        /// Request a [`Prepare`] to be sent from the leader. Used for fail-recovery.
+        PrepareReq(PrepareReq),
+        /// Prepare message sent by a newly-elected leader to initiate the Prepare phase.
+        Prepare(Prepare),
+        /// Promise message sent by a follower in response to a [`Prepare`] sent by the leader.
+        PromiseEC(PromiseEC),
+        /// AcceptSync message sent by the leader to synchronize the logs of all replicas in the prepare phase.
+        AcceptSyncEC(AcceptSyncEC),
+        /// Message with entries to be replicated and the latest decided index sent by the leader in the accept phase.
+        Accepted(Accepted),
+        /// Message sent by follower to leader when entries has been accepted.
+        NotAccepted(NotAccepted),
+        /// Message sent by leader to followers to decide up to a certain index in the log.
+        Decide(Decide),
+        /// Forward client proposals to the leader.
+        ProposalForwardEC(Vec<LogEntry>),
+        /// Compaction Request
+        Compaction(Compaction),
+        /// Accept a StopSign,
+        AcceptStopSign(AcceptStopSign),
+        /// Forward a StopSign to the leader
+        ForwardStopSign(StopSign),
+    }
+
+    /// Erasure coded top-level message
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub enum MessageEC {
+        /// Erasure coded Paxos message with sender/receiver
+        SequencePaxos(PaxosMessageEC),
+        /// Erasure coded ballot leader election message with sender/receiver
+        BLE(super::ballot_leader_election::BLEMessage),
+    }
+
+    /// Erasure coded Paxos message with sender/receiver
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct PaxosMessageEC {
+        /// Sender of `msg`.
+        pub from: NodeId,
+        /// Receiver of `msg`.
+        pub to: NodeId,
+        /// The message content.
+        pub msg: PaxosMsgEC,
+    }
+
+    /// LogSync with erasure-coded entries
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct LogSyncEC {
+        /// The index of the first entry in the log that is being synced.
+        pub entries: Vec<LogEntry>,
+        /// The index of the last entry in the log that is being synced.
+        pub sync_idx: usize,
     }
 }
 

@@ -14,12 +14,12 @@
 #![deny(missing_docs)]
 /// Trait and struct related to the leader election in Omni-Paxos.
 pub mod ballot_leader_election;
+/// Implementation of erasure coding.
+pub mod erasure;
 /// OmniPaxos error definitions
 pub mod errors;
 /// The different messages OmniPaxos servers can communicate to each other with.
 pub mod messages;
-/// Implementation of erasure coding.
-pub mod erasure;
 /// The user-facing OmniPaxos struct.
 mod omni_paxos;
 pub use omni_paxos::*;

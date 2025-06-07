@@ -1,7 +1,8 @@
 use reed_solomon_erasure::{galois_8::ReedSolomon, Error as RSError};
+use serde::{Deserialize, Serialize};
 
 /// A fragment of a log entry for erasure-coded consensus.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntryFragment {
     /// The index of the fragment in the original log entry.
     pub idx: usize,
@@ -128,5 +129,11 @@ impl ECService {
             .collect();
 
         Ok(reconstructed_data)
+    }
+
+    /// Helper to assign a fragment index to a node for a given log index.
+    pub fn fragment_index_for_node(node_id: usize, log_idx: usize, total_shards: usize) -> usize {
+        // Example: round-robin assignment
+        (node_id + log_idx) % total_shards
     }
 }
