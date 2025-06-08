@@ -199,7 +199,7 @@ pub struct ServerConfigEC {
     #[cfg_attr(feature = "toml_config", serde(skip_deserializing))]
     pub custom_logger: Option<slog::Logger>,
     /// Erasure coding service configuration
-    pub erasure_coding_service: Option<ECService>,
+    pub erasure_coding_service: ECService,
 }
 
 impl From<ServerConfigEC> for ServerConfig {
@@ -252,7 +252,7 @@ impl Default for ServerConfigEC {
             logger_file_path: None,
             #[cfg(feature = "logging")]
             custom_logger: None,
-            erasure_coding_service: None,
+            erasure_coding_service: ECService::new(1, 0).unwrap(),
         }
     }
 }

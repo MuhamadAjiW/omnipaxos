@@ -24,6 +24,12 @@ impl ECEntry for ECKeyValue {
     fn value(&self) -> &EntryFragment {
         &self.fragment
     }
+    fn from_parts(key: String, fragment: EntryFragment, op: OperationType) -> Self
+    where
+        Self: Sized,
+    {
+        Self { key, fragment, op }
+    }
 }
 
 // The snapshot does not need to keep track of the operation type,

@@ -45,7 +45,7 @@ where
     logger: Logger,
 
     // EC attributes
-    pub(crate) ec_service: Option<crate::erasure::ec_service::ECService>,
+    pub(crate) ec_service: ECService,
 }
 
 impl<T, B> SequencePaxosEC<T, B>
@@ -408,6 +408,10 @@ where
         common_prefix_idx: usize,
         other_logs_decided_idx: usize,
     ) -> LogSync<T, ClusterConfigEC> {
+        // TODO: Adapt for EC
+        // Here is where the leader creates a LogSync message to send to the follower.
+        // The follower will then use this to sync its log with the leader's log.
+        // The `common_prefix_idx` is the index where the follower's log and the leader's log diverge.
         let decided_idx = self.internal_storage.get_decided_idx();
         let (decided_snapshot, suffix, sync_idx) =
             if T::Snapshot::use_snapshots() && decided_idx > common_prefix_idx {
@@ -492,7 +496,7 @@ pub(crate) struct SequencePaxosConfigEC {
     logger_file_path: Option<String>,
     #[cfg(feature = "logging")]
     custom_logger: Option<Logger>,
-    erasure_coding_service: Option<ECService>,
+    erasure_coding_service: ECService,
 }
 
 impl From<OmniPaxosECConfig> for SequencePaxosConfigEC {

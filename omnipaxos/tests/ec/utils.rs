@@ -1131,6 +1131,16 @@ impl ECEntry for TestECEntry {
     fn value(&self) -> &EntryFragment {
         &self.value
     }
+    fn from_parts(key: String, fragment: EntryFragment, op: OperationType) -> Self
+    where
+        Self: Sized,
+    {
+        TestECEntry {
+            operation: op,
+            key,
+            value: fragment,
+        }
+    }
 }
 
 impl TestECEntry {

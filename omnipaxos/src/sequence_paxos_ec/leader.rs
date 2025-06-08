@@ -2,8 +2,11 @@ use super::super::{
     ballot_leader_election::Ballot,
     util::{LeaderState, PromiseMetaData},
 };
-use crate::erasure::log_entry::ECEntry;
-use crate::util::{AcceptedMetaData, WRITE_ERROR_MSG};
+use crate::erasure::{
+    ec_service::EntryFragment,
+    log_entry::{ECEntry, OperationType},
+};
+use crate::util::WRITE_ERROR_MSG;
 
 use super::*;
 
@@ -110,45 +113,143 @@ where
     }
 
     pub(crate) fn accept_entry_leader(&mut self, entry: T) {
+        let key = entry.key().to_string();
+        let op = entry.operation().clone();
+        let value_bytes =
+            bincode::serialize(entry.value()).expect("ECEntry value must be serializable");
+        let total_shards = self.peers.len() + 1;
+        let fragments = self
+            .ec_service
+            .encode(&value_bytes)
+            .expect("EC encode failed");
+        // Assign fragment to self
+        let my_idx = ECService::fragment_index_for_node(
+            self.pid as usize,
+            self.internal_storage.get_accepted_idx(),
+            total_shards,
+        );
+        let my_entry = T::from_parts(key.clone(), fragments[my_idx].clone(), op.clone());
         let accepted_metadata = self
             .internal_storage
-            .append_entry_with_batching(entry)
+            .append_entry_with_batching(my_entry)
             .expect(WRITE_ERROR_MSG);
+
         if let Some(metadata) = accepted_metadata {
             self.leader_state
                 .set_accepted_idx(self.pid, metadata.accepted_idx);
-            self.send_acceptdecide(metadata);
+            // Distribute fragments to followers
+            self.send_acceptdecide(key, op, fragments, metadata.accepted_idx);
         }
     }
 
     pub(crate) fn accept_entries_leader(&mut self, entries: Vec<T>) {
+        // EC-aware batch accept: encode each entry, store only leader's fragment, send correct fragment to each follower
+        let total_shards = self.peers.len() + 1;
+        let mut my_entries = Vec::with_capacity(entries.len());
+        let mut all_entries: Vec<(String, OperationType, Vec<EntryFragment>)> =
+            Vec::with_capacity(entries.len());
+
+        for (i, entry) in entries.iter().enumerate() {
+            let key = entry.key().to_string();
+            let op = entry.operation().clone();
+            let value_bytes =
+                bincode::serialize(entry.value()).expect("ECEntry value must be serializable");
+            let fragments = self
+                .ec_service
+                .encode(&value_bytes)
+                .expect("EC encode failed");
+            let my_idx = ECService::fragment_index_for_node(
+                self.pid as usize,
+                self.internal_storage.get_accepted_idx() + i,
+                total_shards,
+            );
+            let my_entry = T::from_parts(key.clone(), fragments[my_idx].clone(), op.clone());
+
+            my_entries.push(my_entry);
+            all_entries.push((key, op, fragments));
+        }
+
         let accepted_metadata = self
             .internal_storage
-            .append_entries_with_batching(entries)
+            .append_entries_with_batching(my_entries)
             .expect(WRITE_ERROR_MSG);
+
         if let Some(metadata) = accepted_metadata {
             self.leader_state
                 .set_accepted_idx(self.pid, metadata.accepted_idx);
-            self.send_acceptdecide(metadata);
+            self.send_acceptdecide_batch(
+                &all_entries,
+                metadata.accepted_idx - all_entries.len() + 1,
+            );
         }
     }
 
-    pub(crate) fn accept_stopsign_leader(&mut self, ss: StopSign<ClusterConfigEC>) {
-        let accepted_metadata = self
-            .internal_storage
-            .append_stopsign(ss.clone())
-            .expect(WRITE_ERROR_MSG);
-        if let Some(metadata) = accepted_metadata {
-            self.send_acceptdecide(metadata);
-        }
-        let accepted_idx = self.internal_storage.get_accepted_idx();
-        self.leader_state.set_accepted_idx(self.pid, accepted_idx);
-        for pid in self.leader_state.get_promised_followers() {
-            self.send_accept_stopsign(pid, ss.clone(), false);
+    /// EC-aware: send only the correct fragment to each follower for a single entry
+    fn send_acceptdecide(
+        &mut self,
+        key: String,
+        op: OperationType,
+        fragments: Vec<EntryFragment>,
+        accepted_idx: usize,
+    ) {
+        let decided_idx = self.internal_storage.get_decided_idx();
+        let total_shards = self.peers.len() + 1;
+        for &pid in self.peers.iter() {
+            let frag_idx =
+                ECService::fragment_index_for_node(pid as usize, accepted_idx, total_shards);
+            let entry = T::from_parts(key.clone(), fragments[frag_idx].clone(), op.clone());
+            let acc_dec = AcceptDecide {
+                n: self.leader_state.n_leader,
+                seq_num: self.leader_state.next_seq_num(pid),
+                entries: vec![entry],
+                decided_idx,
+            };
+            self.outgoing.push(Message::SequencePaxos(PaxosMessage {
+                from: self.pid,
+                to: pid,
+                msg: PaxosMsg::AcceptDecide(acc_dec),
+            }));
         }
     }
 
+    /// EC-aware: send only the correct fragment to each follower for a batch of entries
+    fn send_acceptdecide_batch(
+        &mut self,
+        all_entries: &Vec<(String, OperationType, Vec<EntryFragment>)>,
+        start_idx: usize,
+    ) {
+        let decided_idx = self.internal_storage.get_decided_idx();
+        let total_shards = self.peers.len() + 1;
+        for &pid in self.peers.iter() {
+            let mut entries = Vec::with_capacity(all_entries.len());
+            for (i, (key, op, fragments)) in all_entries.iter().enumerate() {
+                let frag_idx =
+                    ECService::fragment_index_for_node(pid as usize, start_idx + i, total_shards);
+                entries.push(T::from_parts(
+                    key.clone(),
+                    fragments[frag_idx].clone(),
+                    op.clone(),
+                ));
+            }
+            if !entries.is_empty() {
+                let acc_dec = AcceptDecide {
+                    n: self.leader_state.n_leader,
+                    seq_num: self.leader_state.next_seq_num(pid),
+                    decided_idx,
+                    entries,
+                };
+                self.outgoing.push(Message::SequencePaxos(PaxosMessage {
+                    from: self.pid,
+                    to: pid,
+                    msg: PaxosMsg::AcceptDecide(acc_dec),
+                }));
+            }
+        }
+    }
+
+    /// EC-aware log sync: send only the correct fragments for the requested log range
     fn send_accsync(&mut self, to: NodeId) {
+        // Follower can have valid accepted entries depending on which leader they were previously following
         let current_n = self.leader_state.n_leader;
         let PromiseMetaData {
             n_accepted: prev_round_max_promise_n,
@@ -165,7 +266,6 @@ where
             .leader_state
             .get_decided_idx(*pid)
             .expect("Received PromiseMetaData but not found in ld");
-        // Follower can have valid accepted entries depending on which leader they were previously following
         let followers_valid_entries_idx = if *followers_promise_n == current_n {
             *followers_accepted_idx
         } else if *followers_promise_n == *prev_round_max_promise_n {
@@ -173,15 +273,37 @@ where
         } else {
             followers_decided_idx
         };
-        let log_sync = self.create_log_sync(followers_valid_entries_idx, followers_decided_idx);
+        // Create EC-aware LogSync: only the correct fragment for 'to' in the suffix
+        let mut log_sync = self.create_log_sync(followers_valid_entries_idx, followers_decided_idx);
+        let total_shards = self.peers.len() + 1;
+        // For each entry in the suffix, replace with only the correct fragment for 'to'
+        for (idx, entry) in log_sync.suffix.iter_mut().enumerate() {
+            let value_bytes =
+                bincode::serialize(entry.value()).expect("ECEntry value must be serializable");
+            let fragments = self
+                .ec_service
+                .encode(&value_bytes)
+                .expect("EC encode failed");
+            let frag_idx = ECService::fragment_index_for_node(
+                to as usize,
+                followers_valid_entries_idx + idx,
+                total_shards,
+            );
+            let new_entry = T::from_parts(
+                entry.key().to_string(),
+                fragments[frag_idx].clone(),
+                entry.operation().clone(),
+            );
+            *entry = new_entry;
+        }
         self.leader_state.increment_seq_num_session(to);
         let acc_sync = AcceptSync {
             n: current_n,
             seq_num: self.leader_state.next_seq_num(to),
             decided_idx: self.get_decided_idx(),
             log_sync,
-            #[cfg(feature = "unicache")]
-            unicache: self.internal_storage.get_unicache(),
+            // #[cfg(feature = "unicache")]
+            // unicache: self.internal_storage.get_unicache(),
         };
         let msg = Message::SequencePaxos(PaxosMessage {
             from: self.pid,
@@ -191,33 +313,28 @@ where
         self.outgoing.push(msg);
     }
 
-    fn send_acceptdecide(&mut self, accepted: AcceptedMetaData<T>) {
-        let decided_idx = self.internal_storage.get_decided_idx();
+    pub(crate) fn accept_stopsign_leader(&mut self, ss: StopSign<ClusterConfigEC>) {
+        let accepted_metadata = self
+            .internal_storage
+            .append_stopsign(ss.clone())
+            .expect(WRITE_ERROR_MSG);
+        if let Some(metadata) = accepted_metadata {
+            // Encode the stopsign as a value and send only the correct fragment to each follower
+            let value_bytes = bincode::serialize(&ss).expect("StopSign must be serializable");
+            let fragments = self
+                .ec_service
+                .encode(&value_bytes)
+                .expect("EC encode failed");
+            let key = "stopsign".to_string();
+            // Operation is null because it is a control message
+            let op = OperationType::NULL;
+            let accepted_idx = metadata.accepted_idx;
+            self.send_acceptdecide(key, op, fragments, accepted_idx);
+        }
+        let accepted_idx = self.internal_storage.get_accepted_idx();
+        self.leader_state.set_accepted_idx(self.pid, accepted_idx);
         for pid in self.leader_state.get_promised_followers() {
-            let latest_accdec = self.get_latest_accdec_message(pid);
-            match latest_accdec {
-                // Modify existing AcceptDecide message to follower
-                Some(accdec) => {
-                    accdec.entries.extend(accepted.entries.iter().cloned());
-                    accdec.decided_idx = decided_idx;
-                }
-                // Add new AcceptDecide message to follower
-                None => {
-                    self.leader_state
-                        .set_latest_accept_meta(pid, Some(self.outgoing.len()));
-                    let acc = AcceptDecide {
-                        n: self.leader_state.n_leader,
-                        seq_num: self.leader_state.next_seq_num(pid),
-                        decided_idx,
-                        entries: accepted.entries.clone(),
-                    };
-                    self.outgoing.push(Message::SequencePaxos(PaxosMessage {
-                        from: self.pid,
-                        to: pid,
-                        msg: PaxosMsg::AcceptDecide(acc),
-                    }));
-                }
-            }
+            self.send_accept_stopsign(pid, ss.clone(), false);
         }
     }
 
@@ -413,6 +530,7 @@ where
         }
     }
 
+    // EC-aware: reconstruct (key, op, fragments) for each entry in the batch
     pub(crate) fn flush_batch_leader(&mut self) {
         let accepted_metadata = self
             .internal_storage
@@ -421,7 +539,23 @@ where
         if let Some(metadata) = accepted_metadata {
             self.leader_state
                 .set_accepted_idx(self.pid, metadata.accepted_idx);
-            self.send_acceptdecide(metadata);
+
+            let mut all_fragments = Vec::with_capacity(metadata.entries.len());
+            let start_idx = metadata.accepted_idx - metadata.entries.len() + 1;
+
+            for entry in metadata.entries.iter() {
+                let key = entry.key().to_string();
+                let op = entry.operation().clone();
+                let value_bytes =
+                    bincode::serialize(entry.value()).expect("ECEntry value must be serializable");
+                let fragments = self
+                    .ec_service
+                    .encode(&value_bytes)
+                    .expect("EC encode failed");
+
+                all_fragments.push((key, op, fragments));
+            }
+            self.send_acceptdecide_batch(&all_fragments, start_idx);
         }
     }
 }
