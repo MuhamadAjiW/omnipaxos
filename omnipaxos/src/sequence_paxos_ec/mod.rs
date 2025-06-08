@@ -302,6 +302,9 @@ where
 
     /// Append an entry to the replicated log.
     pub(crate) fn append(&mut self, entry: T) -> Result<(), ProposeErrEC<T>> {
+        #[cfg(feature = "logging")]
+        info!(self.logger, "Appending entry {:?}", entry);
+
         if self.accepted_reconfiguration() {
             Err(ProposeErrEC::PendingReconfigEntry(entry))
         } else {
@@ -358,6 +361,9 @@ where
     }
 
     fn propose_entry(&mut self, entry: T) {
+        #[cfg(feature = "logging")]
+        info!(self.logger, "Proposing entry {:?}", entry);
+
         match self.state {
             (RoleEC::Leader, PhaseEC::Prepare) => self.buffered_proposals.push(entry),
             (RoleEC::Leader, PhaseEC::Accept) => self.accept_entry_leader(entry),
@@ -370,6 +376,9 @@ where
     }
 
     pub(crate) fn forward_proposals(&mut self, mut entries: Vec<T>) {
+        #[cfg(feature = "logging")]
+        info!(self.logger, "Forwarding entries {:?}", entries);
+
         let leader = self.get_current_leader();
         if leader > 0 && self.pid != leader {
             let pf = PaxosMsg::ProposalForward(entries);

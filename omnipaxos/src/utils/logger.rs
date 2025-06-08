@@ -1,4 +1,4 @@
-use slog::{o, Drain, Logger};
+use slog::{o, Drain, Level, LevelFilter, Logger};
 use std::{fs::OpenOptions, sync::Mutex};
 
 /// Creates an asynchronous logger which outputs to both the terminal and a specified file_path.
@@ -22,5 +22,9 @@ pub fn create_logger(file_path: &str) -> Logger {
 
     let both = Mutex::new(slog::Duplicate::new(term_fuse, file_fuse)).fuse();
     let both = slog_async::Async::new(both).build().fuse();
-    Logger::root(both, o!())
+
+    // Set log level to Debug
+    let filtered = LevelFilter::new(both, Level::Debug).fuse();
+
+    Logger::root(filtered, o!())
 }

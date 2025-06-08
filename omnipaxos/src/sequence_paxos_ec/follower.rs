@@ -190,7 +190,7 @@ where
                     return Some(a);
                 } else {
                     #[cfg(feature = "logging")]
-                    debug!(self.logger, "Cached idx is not an Accepted message!");
+                    info!(self.logger, "Cached idx is not an Accepted message!");
                 }
             }
         }

@@ -55,7 +55,7 @@ impl OmniPaxosUI {
             self.terminal.hide_cursor().unwrap();
             self.update_ui();
             self.started = true;
-            debug!(Self::logger(), "UI started with slog");
+            info!(Self::logger(), "UI started with slog");
         }
     }
 

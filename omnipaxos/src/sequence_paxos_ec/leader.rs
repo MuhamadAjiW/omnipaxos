@@ -18,16 +18,11 @@ where
     /// Handle a new leader. Should be called when the leader election has elected a new leader with the ballot `n`
     /*** Leader ***/
     pub(crate) fn handle_leader(&mut self, n: Ballot) {
-        #[cfg(feature = "logging")]
-        debug!(
-            self.logger,
-            "[TRACE][NODE {}] ENTER handle_leader(n={:?})", self.pid, n
-        );
         if n <= self.leader_state.n_leader || n <= self.internal_storage.get_promise() {
             return;
         }
         #[cfg(feature = "logging")]
-        debug!(self.logger, "Newly elected leader: {:?}", n);
+        info!(self.logger, "Newly elected leader: {:?}", n);
         if self.pid == n.pid {
             self.leader_state =
                 LeaderState::with(n, self.leader_state.max_pid, self.leader_state.quorum);
@@ -70,23 +65,23 @@ where
 
     pub(crate) fn become_follower(&mut self) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][NODE {}] ENTER become_follower", self.pid
         );
         #[cfg(feature = "logging")]
-        debug!(self.logger, "[NODE {}] become_follower", self.pid);
+        info!(self.logger, "[NODE {}] become_follower", self.pid);
         self.state.0 = RoleEC::Follower;
     }
 
     pub(crate) fn handle_preparereq(&mut self, prepreq: PrepareReq, from: NodeId) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][NODE {}] ENTER handle_preparereq(from={})", self.pid, from
         );
         #[cfg(feature = "logging")]
-        debug!(self.logger, "Incoming message PrepareReq from {}", from);
+        info!(self.logger, "Incoming message PrepareReq from {}", from);
         if self.state.0 == RoleEC::Leader && prepreq.n <= self.leader_state.n_leader {
             self.leader_state.reset_promise(from);
             self.leader_state.set_latest_accept_meta(from, None);
@@ -96,7 +91,7 @@ where
 
     pub(crate) fn handle_forwarded_proposal(&mut self, mut entries: Vec<T>) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][NODE {}] ENTER handle_forwarded_proposal: entries={:?}",
             self.pid,
@@ -116,7 +111,7 @@ where
 
     pub(crate) fn handle_forwarded_stopsign(&mut self, ss: StopSign<ClusterConfigEC>) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][NODE {}] ENTER handle_forwarded_stopsign: stopsign={:?}", self.pid, ss
         );
@@ -132,7 +127,7 @@ where
 
     pub(crate) fn send_prepare(&mut self, to: NodeId) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][NODE {}] ENTER send_prepare(to={})", self.pid, to
         );
@@ -151,7 +146,7 @@ where
 
     pub(crate) fn accept_entry_leader(&mut self, entry: T) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER accept_entry_leader: key={}, op={:?}, fragment.idx={}, fragment.data={:?}",
             self.pid,
@@ -170,7 +165,7 @@ where
             .encode(&value_bytes)
             .expect("EC encode failed");
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] accept_entry_leader: encoded fragments={:?}",
             self.pid,
@@ -182,7 +177,7 @@ where
         // Assign fragment to self
         let my_idx = ECService::fragment_index_for_node(self.pid as usize, total_shards);
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] accept_entry_leader: my_idx={} (pid={})",
             self.pid,
@@ -205,7 +200,7 @@ where
 
     pub(crate) fn accept_entries_leader(&mut self, entries: Vec<T>) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER accept_entries_leader: entries={:?}",
             self.pid,
@@ -228,7 +223,7 @@ where
                 .encode(&entry.value().data)
                 .expect("EC encode failed");
             #[cfg(feature = "logging")]
-            debug!(
+            info!(
                 self.logger,
                 "[TRACE][LEADER {}] accept_entries_leader: entry {} key={} fragments={:?}",
                 self.pid,
@@ -241,7 +236,7 @@ where
             );
             let my_idx = ECService::fragment_index_for_node(self.pid as usize, total_shards);
             #[cfg(feature = "logging")]
-            debug!(
+            info!(
                 self.logger,
                 "[TRACE][LEADER {}] accept_entries_leader: entry {} my_idx={} (pid={})",
                 self.pid,
@@ -270,7 +265,7 @@ where
     /// EC-aware: send only the correct fragment to each follower for a single entry
     fn send_acceptdecide(&mut self, key: String, op: OperationType, fragments: Vec<EntryFragment>) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER send_acceptdecide: key={}, op={:?}, fragments={:?}",
             self.pid,
@@ -286,7 +281,7 @@ where
         for &pid in self.peers.iter() {
             let frag_idx = ECService::fragment_index_for_node(pid as usize, total_shards);
             #[cfg(feature = "logging")]
-            debug!(
+            info!(
                 self.logger,
                 "[TRACE][LEADER {}] send_acceptdecide: to pid={} frag_idx={} fragment={:?}",
                 self.pid,
@@ -315,7 +310,7 @@ where
         all_entries: &Vec<(String, OperationType, Vec<EntryFragment>)>,
     ) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER send_acceptdecide_batch: all_entries.len={}",
             self.pid,
@@ -328,7 +323,7 @@ where
             for (_i, (key, op, fragments)) in all_entries.iter().enumerate() {
                 let frag_idx = ECService::fragment_index_for_node(pid as usize, total_shards);
                 #[cfg(feature = "logging")]
-                debug!(
+                info!(
                     self.logger,
                     "[TRACE][LEADER {}] send_acceptdecide_batch: to pid={} entry {} frag_idx={} fragment={:?}",
                     self.pid,
@@ -362,7 +357,7 @@ where
     /// EC-aware log sync: send only the correct fragments for the requested log range
     fn send_accsync(&mut self, to: NodeId) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER send_accsync to {}", self.pid, to
         );
@@ -426,7 +421,7 @@ where
 
     pub(crate) fn accept_stopsign_leader(&mut self, ss: StopSign<ClusterConfigEC>) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER accept_stopsign_leader: stopsign={:?}", self.pid, ss
         );
@@ -455,7 +450,7 @@ where
 
     fn send_accept_stopsign(&mut self, to: NodeId, ss: StopSign<ClusterConfigEC>, resend: bool) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER send_accept_stopsign(to={}, resend={})", self.pid, to, resend
         );
@@ -477,7 +472,7 @@ where
 
     pub(crate) fn send_decide(&mut self, to: NodeId, decided_idx: usize, resend: bool) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER send_decide(to={}, decided_idx={}, resend={})",
             self.pid,
@@ -503,7 +498,7 @@ where
 
     fn handle_majority_promises(&mut self) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER handle_majority_promises", self.pid
         );
@@ -542,12 +537,12 @@ where
         from: NodeId,
     ) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER handle_promise_prepare(from={})", self.pid, from
         );
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "Handling promise from {} in Prepare phase", from
         );
@@ -565,14 +560,14 @@ where
         from: NodeId,
     ) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER handle_promise_accept(from={})", self.pid, from
         );
         #[cfg(feature = "logging")]
         {
             let (r, p) = &self.state;
-            debug!(
+            info!(
                 self.logger,
                 "Self role {:?}, phase {:?}. Incoming message Promise Accept from {}", r, p, from
             );
@@ -585,7 +580,7 @@ where
 
     pub(crate) fn handle_accepted(&mut self, accepted: Accepted, from: NodeId) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER handle_accepted(from={})", self.pid, from
         );
@@ -623,7 +618,7 @@ where
 
     fn get_latest_accdec_message(&mut self, to: NodeId) -> Option<&mut AcceptDecide<T>> {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER get_latest_accdec_message(to={})", self.pid, to
         );
@@ -637,7 +632,7 @@ where
                     return Some(accdec);
                 } else {
                     #[cfg(feature = "logging")]
-                    debug!(self.logger, "Cached idx is not an AcceptedDecide!");
+                    info!(self.logger, "Cached idx is not an AcceptedDecide!");
                 }
             }
         }
@@ -646,7 +641,7 @@ where
 
     pub(crate) fn handle_notaccepted(&mut self, not_acc: NotAccepted, from: NodeId) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER handle_notaccepted(from={})", self.pid, from
         );
@@ -657,7 +652,7 @@ where
 
     pub(crate) fn resend_messages_leader(&mut self) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER resend_messages_leader", self.pid
         );
@@ -697,7 +692,7 @@ where
     // EC-aware: reconstruct (key, op, fragments) for each entry in the batch
     pub(crate) fn flush_batch_leader(&mut self) {
         #[cfg(feature = "logging")]
-        debug!(
+        info!(
             self.logger,
             "[TRACE][LEADER {}] ENTER flush_batch_leader", self.pid
         );
