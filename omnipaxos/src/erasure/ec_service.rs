@@ -133,8 +133,7 @@ impl ECService {
     }
 
     /// Helper to assign a fragment index to a node for a given log index.
-    pub fn fragment_index_for_node(node_id: usize, log_idx: usize, total_shards: usize) -> usize {
-        // Example: round-robin assignment
-        (node_id + log_idx) % total_shards
+    pub fn fragment_index_for_node(node_id: usize, total_shards: usize) -> usize {
+        node_id % total_shards
     }
 }

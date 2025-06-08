@@ -18,7 +18,11 @@ where
     /// Handle a new leader. Should be called when the leader election has elected a new leader with the ballot `n`
     /*** Leader ***/
     pub(crate) fn handle_leader(&mut self, n: Ballot) {
-        eprintln!("[TRACE][NODE {}] ENTER handle_leader(n={:?})", self.pid, n);
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][NODE {}] ENTER handle_leader(n={:?})", self.pid, n
+        );
         if n <= self.leader_state.n_leader || n <= self.internal_storage.get_promise() {
             return;
         }
@@ -65,15 +69,21 @@ where
     }
 
     pub(crate) fn become_follower(&mut self) {
-        eprintln!("[TRACE][NODE {}] ENTER become_follower", self.pid);
-        eprintln!("[NODE {}] become_follower", self.pid);
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][NODE {}] ENTER become_follower", self.pid
+        );
+        #[cfg(feature = "logging")]
+        debug!(self.logger, "[NODE {}] become_follower", self.pid);
         self.state.0 = RoleEC::Follower;
     }
 
     pub(crate) fn handle_preparereq(&mut self, prepreq: PrepareReq, from: NodeId) {
-        eprintln!(
-            "[TRACE][NODE {}] ENTER handle_preparereq(from={})",
-            self.pid, from
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][NODE {}] ENTER handle_preparereq(from={})", self.pid, from
         );
         #[cfg(feature = "logging")]
         debug!(self.logger, "Incoming message PrepareReq from {}", from);
@@ -85,7 +95,9 @@ where
     }
 
     pub(crate) fn handle_forwarded_proposal(&mut self, mut entries: Vec<T>) {
-        eprintln!(
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
             "[TRACE][NODE {}] ENTER handle_forwarded_proposal: entries={:?}",
             self.pid,
             entries
@@ -103,9 +115,10 @@ where
     }
 
     pub(crate) fn handle_forwarded_stopsign(&mut self, ss: StopSign<ClusterConfigEC>) {
-        eprintln!(
-            "[TRACE][NODE {}] ENTER handle_forwarded_stopsign: stopsign={:?}",
-            self.pid, ss
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][NODE {}] ENTER handle_forwarded_stopsign: stopsign={:?}", self.pid, ss
         );
         if self.accepted_reconfiguration() {
             return;
@@ -118,7 +131,11 @@ where
     }
 
     pub(crate) fn send_prepare(&mut self, to: NodeId) {
-        eprintln!("[TRACE][NODE {}] ENTER send_prepare(to={})", self.pid, to);
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][NODE {}] ENTER send_prepare(to={})", self.pid, to
+        );
         let prep = Prepare {
             n: self.leader_state.n_leader,
             decided_idx: self.internal_storage.get_decided_idx(),
@@ -133,7 +150,16 @@ where
     }
 
     pub(crate) fn accept_entry_leader(&mut self, entry: T) {
-        eprintln!("[TRACE][LEADER {}] ENTER accept_entry_leader: key={}, op={:?}, fragment.idx={}, fragment.data={:?}", self.pid, entry.key(), entry.operation(), entry.value().idx, entry.value().data);
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER accept_entry_leader: key={}, op={:?}, fragment.idx={}, fragment.data={:?}",
+            self.pid,
+            entry.key(),
+            entry.operation(),
+            entry.value().idx,
+            entry.value().data
+        );
         let key = entry.key().to_string();
         let op = entry.operation().clone();
         let value_bytes =
@@ -143,7 +169,9 @@ where
             .ec_service
             .encode(&value_bytes)
             .expect("EC encode failed");
-        eprintln!(
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
             "[TRACE][LEADER {}] accept_entry_leader: encoded fragments={:?}",
             self.pid,
             fragments
@@ -152,14 +180,14 @@ where
                 .collect::<Vec<_>>()
         );
         // Assign fragment to self
-        let my_idx = ECService::fragment_index_for_node(
-            self.pid as usize,
-            self.internal_storage.get_accepted_idx(),
-            total_shards,
-        );
-        eprintln!(
+        let my_idx = ECService::fragment_index_for_node(self.pid as usize, total_shards);
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
             "[TRACE][LEADER {}] accept_entry_leader: my_idx={} (pid={})",
-            self.pid, my_idx, self.pid
+            self.pid,
+            my_idx,
+            self.pid
         );
         let my_entry = T::from_parts(key.clone(), fragments[my_idx].clone(), op.clone());
         let accepted_metadata = self
@@ -171,12 +199,14 @@ where
             self.leader_state
                 .set_accepted_idx(self.pid, metadata.accepted_idx);
             // Distribute fragments to followers
-            self.send_acceptdecide(key, op, fragments, metadata.accepted_idx);
+            self.send_acceptdecide(key, op, fragments);
         }
     }
 
     pub(crate) fn accept_entries_leader(&mut self, entries: Vec<T>) {
-        eprintln!(
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
             "[TRACE][LEADER {}] ENTER accept_entries_leader: entries={:?}",
             self.pid,
             entries
@@ -190,33 +220,34 @@ where
         let mut all_entries: Vec<(String, OperationType, Vec<EntryFragment>)> =
             Vec::with_capacity(entries.len());
 
-        for (i, entry) in entries.iter().enumerate() {
+        for (_i, entry) in entries.iter().enumerate() {
             let key = entry.key().to_string();
             let op = entry.operation().clone();
-            let value_bytes =
-                bincode::serialize(entry.value()).expect("ECEntry value must be serializable");
             let fragments = self
                 .ec_service
-                .encode(&value_bytes)
+                .encode(&entry.value().data)
                 .expect("EC encode failed");
-            eprintln!(
+            #[cfg(feature = "logging")]
+            debug!(
+                self.logger,
                 "[TRACE][LEADER {}] accept_entries_leader: entry {} key={} fragments={:?}",
                 self.pid,
-                i,
+                _i,
                 key,
                 fragments
                     .iter()
                     .map(|f| (f.idx, &f.data))
                     .collect::<Vec<_>>()
             );
-            let my_idx = ECService::fragment_index_for_node(
-                self.pid as usize,
-                self.internal_storage.get_accepted_idx() + i,
-                total_shards,
-            );
-            eprintln!(
+            let my_idx = ECService::fragment_index_for_node(self.pid as usize, total_shards);
+            #[cfg(feature = "logging")]
+            debug!(
+                self.logger,
                 "[TRACE][LEADER {}] accept_entries_leader: entry {} my_idx={} (pid={})",
-                self.pid, i, my_idx, self.pid
+                self.pid,
+                _i,
+                my_idx,
+                self.pid
             );
             let my_entry = T::from_parts(key.clone(), fragments[my_idx].clone(), op.clone());
 
@@ -232,30 +263,36 @@ where
         if let Some(metadata) = accepted_metadata {
             self.leader_state
                 .set_accepted_idx(self.pid, metadata.accepted_idx);
-            self.send_acceptdecide_batch(
-                &all_entries,
-                metadata.accepted_idx - all_entries.len() + 1,
-            );
+            self.send_acceptdecide_batch(&all_entries);
         }
     }
 
     /// EC-aware: send only the correct fragment to each follower for a single entry
-    fn send_acceptdecide(
-        &mut self,
-        key: String,
-        op: OperationType,
-        fragments: Vec<EntryFragment>,
-        accepted_idx: usize,
-    ) {
-        eprintln!("[TRACE][LEADER {}] ENTER send_acceptdecide: key={}, op={:?}, accepted_idx={}, fragments={:?}", self.pid, key, op, accepted_idx, fragments.iter().map(|f| (f.idx, &f.data)).collect::<Vec<_>>());
+    fn send_acceptdecide(&mut self, key: String, op: OperationType, fragments: Vec<EntryFragment>) {
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER send_acceptdecide: key={}, op={:?}, fragments={:?}",
+            self.pid,
+            key,
+            op,
+            fragments
+                .iter()
+                .map(|f| (f.idx, &f.data))
+                .collect::<Vec<_>>()
+        );
         let decided_idx = self.internal_storage.get_decided_idx();
         let total_shards = self.peers.len() + 1;
         for &pid in self.peers.iter() {
-            let frag_idx =
-                ECService::fragment_index_for_node(pid as usize, accepted_idx, total_shards);
-            eprintln!(
+            let frag_idx = ECService::fragment_index_for_node(pid as usize, total_shards);
+            #[cfg(feature = "logging")]
+            debug!(
+                self.logger,
                 "[TRACE][LEADER {}] send_acceptdecide: to pid={} frag_idx={} fragment={:?}",
-                self.pid, pid, frag_idx, fragments[frag_idx]
+                self.pid,
+                pid,
+                frag_idx,
+                fragments[frag_idx]
             );
             let entry = T::from_parts(key.clone(), fragments[frag_idx].clone(), op.clone());
             let acc_dec = AcceptDecide {
@@ -276,22 +313,30 @@ where
     fn send_acceptdecide_batch(
         &mut self,
         all_entries: &Vec<(String, OperationType, Vec<EntryFragment>)>,
-        start_idx: usize,
     ) {
-        eprintln!(
-            "[TRACE][LEADER {}] ENTER send_acceptdecide_batch: start_idx={}, all_entries.len={}",
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER send_acceptdecide_batch: all_entries.len={}",
             self.pid,
-            start_idx,
             all_entries.len()
         );
         let decided_idx = self.internal_storage.get_decided_idx();
         let total_shards = self.peers.len() + 1;
         for &pid in self.peers.iter() {
             let mut entries = Vec::with_capacity(all_entries.len());
-            for (i, (key, op, fragments)) in all_entries.iter().enumerate() {
-                let frag_idx =
-                    ECService::fragment_index_for_node(pid as usize, start_idx + i, total_shards);
-                eprintln!("[TRACE][LEADER {}] send_acceptdecide_batch: to pid={} entry {} frag_idx={} fragment={:?}", self.pid, pid, i, frag_idx, fragments[frag_idx]);
+            for (_i, (key, op, fragments)) in all_entries.iter().enumerate() {
+                let frag_idx = ECService::fragment_index_for_node(pid as usize, total_shards);
+                #[cfg(feature = "logging")]
+                debug!(
+                    self.logger,
+                    "[TRACE][LEADER {}] send_acceptdecide_batch: to pid={} entry {} frag_idx={} fragment={:?}",
+                    self.pid,
+                    pid,
+                    _i,
+                    frag_idx,
+                    fragments[frag_idx]
+                );
                 entries.push(T::from_parts(
                     key.clone(),
                     fragments[frag_idx].clone(),
@@ -316,7 +361,11 @@ where
 
     /// EC-aware log sync: send only the correct fragments for the requested log range
     fn send_accsync(&mut self, to: NodeId) {
-        eprintln!("[TRACE][LEADER {}] ENTER send_accsync to {}", self.pid, to);
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER send_accsync to {}", self.pid, to
+        );
         // Follower can have valid accepted entries depending on which leader they were previously following
         let current_n = self.leader_state.n_leader;
         let PromiseMetaData {
@@ -345,18 +394,12 @@ where
         let mut log_sync = self.create_log_sync(followers_valid_entries_idx, followers_decided_idx);
         let total_shards = self.peers.len() + 1;
         // For each entry in the suffix, replace with only the correct fragment for 'to'
-        for (idx, entry) in log_sync.suffix.iter_mut().enumerate() {
-            let value_bytes =
-                bincode::serialize(entry.value()).expect("ECEntry value must be serializable");
+        for entry in log_sync.suffix.iter_mut() {
             let fragments = self
                 .ec_service
-                .encode(&value_bytes)
+                .encode(&entry.value().data)
                 .expect("EC encode failed");
-            let frag_idx = ECService::fragment_index_for_node(
-                to as usize,
-                followers_valid_entries_idx + idx,
-                total_shards,
-            );
+            let frag_idx = ECService::fragment_index_for_node(to as usize, total_shards);
             let new_entry = T::from_parts(
                 entry.key().to_string(),
                 fragments[frag_idx].clone(),
@@ -382,15 +425,16 @@ where
     }
 
     pub(crate) fn accept_stopsign_leader(&mut self, ss: StopSign<ClusterConfigEC>) {
-        eprintln!(
-            "[TRACE][LEADER {}] ENTER accept_stopsign_leader: stopsign={:?}",
-            self.pid, ss
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER accept_stopsign_leader: stopsign={:?}", self.pid, ss
         );
         let accepted_metadata = self
             .internal_storage
             .append_stopsign(ss.clone())
             .expect(WRITE_ERROR_MSG);
-        if let Some(metadata) = accepted_metadata {
+        if let Some(_metadata) = accepted_metadata {
             // Encode the stopsign as a value and send only the correct fragment to each follower
             let value_bytes = bincode::serialize(&ss).expect("StopSign must be serializable");
             let fragments = self
@@ -400,8 +444,7 @@ where
             let key = "stopsign".to_string();
             // Operation is null because it is a control message
             let op = OperationType::NULL;
-            let accepted_idx = metadata.accepted_idx;
-            self.send_acceptdecide(key, op, fragments, accepted_idx);
+            self.send_acceptdecide(key, op, fragments);
         }
         let accepted_idx = self.internal_storage.get_accepted_idx();
         self.leader_state.set_accepted_idx(self.pid, accepted_idx);
@@ -411,9 +454,10 @@ where
     }
 
     fn send_accept_stopsign(&mut self, to: NodeId, ss: StopSign<ClusterConfigEC>, resend: bool) {
-        eprintln!(
-            "[TRACE][LEADER {}] ENTER send_accept_stopsign(to={}, resend={})",
-            self.pid, to, resend
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER send_accept_stopsign(to={}, resend={})", self.pid, to, resend
         );
         let seq_num = match resend {
             true => self.leader_state.get_seq_num(to),
@@ -432,9 +476,14 @@ where
     }
 
     pub(crate) fn send_decide(&mut self, to: NodeId, decided_idx: usize, resend: bool) {
-        eprintln!(
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
             "[TRACE][LEADER {}] ENTER send_decide(to={}, decided_idx={}, resend={})",
-            self.pid, to, decided_idx, resend
+            self.pid,
+            to,
+            decided_idx,
+            resend
         );
         let seq_num = match resend {
             true => self.leader_state.get_seq_num(to),
@@ -453,9 +502,10 @@ where
     }
 
     fn handle_majority_promises(&mut self) {
-        eprintln!(
-            "[TRACE][LEADER {}] ENTER handle_majority_promises",
-            self.pid
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER handle_majority_promises", self.pid
         );
         let max_promise_sync = self.leader_state.take_max_promise_sync();
         let decided_idx = self.leader_state.get_max_decided_idx();
@@ -491,9 +541,10 @@ where
         prom: Promise<T, ClusterConfigEC>,
         from: NodeId,
     ) {
-        eprintln!(
-            "[TRACE][LEADER {}] ENTER handle_promise_prepare(from={})",
-            self.pid, from
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER handle_promise_prepare(from={})", self.pid, from
         );
         #[cfg(feature = "logging")]
         debug!(
@@ -513,9 +564,10 @@ where
         prom: Promise<T, ClusterConfigEC>,
         from: NodeId,
     ) {
-        eprintln!(
-            "[TRACE][LEADER {}] ENTER handle_promise_accept(from={})",
-            self.pid, from
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER handle_promise_accept(from={})", self.pid, from
         );
         #[cfg(feature = "logging")]
         {
@@ -532,9 +584,10 @@ where
     }
 
     pub(crate) fn handle_accepted(&mut self, accepted: Accepted, from: NodeId) {
-        eprintln!(
-            "[TRACE][LEADER {}] ENTER handle_accepted(from={})",
-            self.pid, from
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER handle_accepted(from={})", self.pid, from
         );
         #[cfg(feature = "logging")]
         trace!(
@@ -569,9 +622,10 @@ where
     }
 
     fn get_latest_accdec_message(&mut self, to: NodeId) -> Option<&mut AcceptDecide<T>> {
-        eprintln!(
-            "[TRACE][LEADER {}] ENTER get_latest_accdec_message(to={})",
-            self.pid, to
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER get_latest_accdec_message(to={})", self.pid, to
         );
         if let Some((bal, outgoing_idx)) = self.leader_state.get_latest_accept_meta(to) {
             if bal == self.leader_state.n_leader {
@@ -591,9 +645,10 @@ where
     }
 
     pub(crate) fn handle_notaccepted(&mut self, not_acc: NotAccepted, from: NodeId) {
-        eprintln!(
-            "[TRACE][LEADER {}] ENTER handle_notaccepted(from={})",
-            self.pid, from
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER handle_notaccepted(from={})", self.pid, from
         );
         if self.state.0 == RoleEC::Leader && self.leader_state.n_leader < not_acc.n {
             self.leader_state.lost_promise(from);
@@ -601,7 +656,11 @@ where
     }
 
     pub(crate) fn resend_messages_leader(&mut self) {
-        eprintln!("[TRACE][LEADER {}] ENTER resend_messages_leader", self.pid);
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER resend_messages_leader", self.pid
+        );
         match self.state.1 {
             PhaseEC::Prepare => {
                 // Resend Prepare
@@ -637,7 +696,11 @@ where
 
     // EC-aware: reconstruct (key, op, fragments) for each entry in the batch
     pub(crate) fn flush_batch_leader(&mut self) {
-        eprintln!("[TRACE][LEADER {}] ENTER flush_batch_leader", self.pid);
+        #[cfg(feature = "logging")]
+        debug!(
+            self.logger,
+            "[TRACE][LEADER {}] ENTER flush_batch_leader", self.pid
+        );
         let accepted_metadata = self
             .internal_storage
             .flush_batch_and_get_entries()
@@ -647,21 +710,18 @@ where
                 .set_accepted_idx(self.pid, metadata.accepted_idx);
 
             let mut all_fragments = Vec::with_capacity(metadata.entries.len());
-            let start_idx = metadata.accepted_idx - metadata.entries.len() + 1;
 
             for entry in metadata.entries.iter() {
                 let key = entry.key().to_string();
                 let op = entry.operation().clone();
-                let value_bytes =
-                    bincode::serialize(entry.value()).expect("ECEntry value must be serializable");
                 let fragments = self
                     .ec_service
-                    .encode(&value_bytes)
+                    .encode(&entry.value().data)
                     .expect("EC encode failed");
 
                 all_fragments.push((key, op, fragments));
             }
-            self.send_acceptdecide_batch(&all_fragments, start_idx);
+            self.send_acceptdecide_batch(&all_fragments);
         }
     }
 }

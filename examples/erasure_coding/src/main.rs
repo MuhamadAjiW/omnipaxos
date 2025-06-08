@@ -5,7 +5,7 @@ use omnipaxos::{
         log_entry::OperationType,
     },
     messages::Message,
-    util::{LogEntry, NodeId},
+    util::NodeId,
     *,
 };
 use omnipaxos_storage::memory_storage::MemoryStorage;
