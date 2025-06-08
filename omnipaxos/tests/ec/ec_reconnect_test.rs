@@ -23,7 +23,6 @@ const SECOND_PROPOSALS: u64 = 5;
 #[test]
 #[serial]
 fn ec_increasing_accept_seq_num_test() {
-    println!("STARTING TEST: ec_increasing_accept_seq_num_test");
     // Start Kompact system
     let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystemEC::with(cfg);
@@ -92,7 +91,6 @@ fn ec_increasing_accept_seq_num_test() {
 #[test]
 #[serial]
 fn ec_reconnect_after_dropped_accepts_test() {
-    println!("STARTING TEST: ec_reconnect_after_dropped_accepts_test");
     // Start Kompact system
     let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystemEC::with(cfg);
@@ -137,7 +135,6 @@ fn ec_reconnect_after_dropped_accepts_test() {
     // Verify log
     let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.read_decided_log());
-    println!("[ec_reconnect_after_dropped_accepts_test] followers_log: {:?}", followers_log);
     verify_log(followers_log, expected_log);
 
     // Shutdown system
@@ -155,7 +152,6 @@ fn ec_reconnect_after_dropped_accepts_test() {
 #[test]
 #[serial]
 fn ec_reconnect_after_dropped_prepare_test() {
-    println!("STARTING TEST: ec_reconnect_after_dropped_prepare_test");
     // Start Kompact system
     let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystemEC::with(cfg);
@@ -216,7 +212,10 @@ fn ec_reconnect_after_dropped_prepare_test() {
 
     let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.read_decided_log());
-    println!("[ec_reconnect_after_dropped_prepare_test] followers_log: {:?}", followers_log);
+    println!(
+        "[ec_reconnect_after_dropped_prepare_test] followers_log: {:?}",
+        followers_log
+    );
     verify_log(followers_log, expected_log);
 
     // Shutdown system
@@ -234,7 +233,6 @@ fn ec_reconnect_after_dropped_prepare_test() {
 #[test]
 #[serial]
 fn ec_reconnect_after_dropped_promise_test() {
-    println!("STARTING TEST: ec_reconnect_after_dropped_promise_test");
     // Start Kompact system
     let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystemEC::with(cfg);
@@ -301,7 +299,10 @@ fn ec_reconnect_after_dropped_promise_test() {
     // Verify log
     let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.read_decided_log());
-    println!("[ec_reconnect_after_dropped_promise_test] followers_log: {:?}", followers_log);
+    println!(
+        "[ec_reconnect_after_dropped_promise_test] followers_log: {:?}",
+        followers_log
+    );
     verify_log(followers_log, expected_log);
 
     // Shutdown system
@@ -319,7 +320,6 @@ fn ec_reconnect_after_dropped_promise_test() {
 #[test]
 #[serial]
 fn ec_reconnect_after_dropped_preparereq_test() {
-    println!("STARTING TEST: ec_reconnect_after_dropped_preparereq_test");
     // Start Kompact system
     let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystemEC::with(cfg);
@@ -370,7 +370,10 @@ fn ec_reconnect_after_dropped_preparereq_test() {
 
     let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.read_decided_log());
-    println!("[ec_reconnect_after_dropped_preparereq_test] followers_log: {:?}", followers_log);
+    println!(
+        "[ec_reconnect_after_dropped_preparereq_test] followers_log: {:?}",
+        followers_log
+    );
     verify_log(followers_log, expected_log);
 
     // Shutdown system
@@ -388,7 +391,6 @@ fn ec_reconnect_after_dropped_preparereq_test() {
 #[test]
 #[serial]
 fn ec_resync_after_dropped_acceptstopsign_test() {
-    println!("STARTING TEST: ec_resync_after_dropped_acceptstopsign_test");
     // Start Kompact system
     let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystemEC::with(cfg);
@@ -430,7 +432,10 @@ fn ec_resync_after_dropped_acceptstopsign_test() {
     // Verify log
     let followers_log: Vec<LogEntry<TestECEntry, ClusterConfigEC>> =
         follower.on_definition(|x| x.read_decided_log());
-    println!("[ec_resync_after_dropped_acceptstopsign_test] followers_log: {:?}", followers_log);
+    println!(
+        "[ec_resync_after_dropped_acceptstopsign_test] followers_log: {:?}",
+        followers_log
+    );
     verify_stopsign(&followers_log, &StopSign::with(next_config, None));
 
     // Shutdown system
@@ -450,7 +455,6 @@ fn ec_resync_after_dropped_acceptstopsign_test() {
 #[test]
 #[serial]
 fn ec_reconnect_after_dropped_acceptstopsign_test() {
-    println!("STARTING TEST: ec_reconnect_after_dropped_acceptstopsign_test");
     // Start Kompact system
     let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystemEC::with(cfg);
@@ -519,7 +523,6 @@ fn ec_reconnect_after_dropped_acceptstopsign_test() {
 #[test]
 #[serial]
 fn ec_reconnect_after_dropped_decidestopsign_test() {
-    println!("STARTING TEST: ec_reconnect_after_dropped_decidestopsign_test");
     // Start Kompact system
     let cfg = TestConfigEC::load("reconnect_test").expect("Test config couldn't be loaded");
     let mut sys = TestSystemEC::with(cfg);

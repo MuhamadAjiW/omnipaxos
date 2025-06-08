@@ -25,7 +25,6 @@ struct SyncTest {
 #[test]
 #[serial]
 fn ec_sync_full_test() {
-    println!("[TEST START] ec_sync_full_test");
     // Define leader's log
     let leaders_log = [1, 2, 3, 4, 5, 10, 11, 12]
         .into_iter()
@@ -62,7 +61,6 @@ fn ec_sync_full_test() {
 #[test]
 #[serial]
 fn ec_sync_decided_ss_test() {
-    println!("[TEST START] ec_sync_decided_ss_test");
     // Define leader's log
     let leaders_log = [1, 2, 3, 4, 5]
         .into_iter()
@@ -87,7 +85,7 @@ fn ec_sync_decided_ss_test() {
         leaders_dec_idx,
         followers_log,
         followers_dec_idx,
-        ..Default::default
+        ..Default::default()
     };
     sync_test(test);
 }
@@ -96,7 +94,6 @@ fn ec_sync_decided_ss_test() {
 #[test]
 #[serial]
 fn ec_sync_only_stopsign_test() {
-    println!("[TEST START] ec_sync_only_stopsign_test");
     // Define leader's log
     let leaders_dec_idx = 1;
     let cluster_config = ClusterConfigEC::default();
@@ -121,7 +118,6 @@ fn ec_sync_only_stopsign_test() {
 #[test]
 #[serial]
 fn ec_sync_only_snapshot_test() {
-    println!("[TEST START] ec_sync_only_snapshot_test");
     // Define leader's log
     let leaders_log: Vec<TestECEntry> = [1, 2, 3].into_iter().map(TestECEntry::dummy).collect();
     let leaders_dec_idx = 3;
@@ -145,7 +141,6 @@ fn ec_sync_only_snapshot_test() {
 #[test]
 #[serial]
 fn ec_sync_follower_snapshot_test() {
-    println!("[TEST START] ec_sync_follower_snapshot_test");
     // Define leader's log
     let leaders_log = [1, 2, 3, 4, 5]
         .into_iter()
@@ -283,9 +278,7 @@ fn sync_test(test: SyncTest) {
     let mut followers_entries = follower.on_definition(|x| x.read_decided_log());
     if let Some(ss) = &test.leaders_ss {
         let followers_ss = followers_entries.pop().expect("Follower had no entries");
-        println!("[VERIFY] ec_sync_test: verify_stopsign, entries: {:?}, expected: {:?}", followers_ss, ss);
         verify_stopsign(&[followers_ss], ss);
     }
-    println!("[VERIFY] ec_sync_test: verify_log, entries: {:?}, expected: {:?}", followers_entries, test.leaders_log);
     verify_log(followers_entries, test.leaders_log);
 }

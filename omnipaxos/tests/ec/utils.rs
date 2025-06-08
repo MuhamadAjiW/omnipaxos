@@ -2,8 +2,9 @@ use self::omnireplica::OmniPaxosComponentEC;
 use kompact::{config_keys::system, executors::crossbeam_workstealing_pool, prelude::*};
 use omnipaxos::{
     ballot_leader_election::Ballot,
+    macros::*,
     messages::Message,
-    storage::{Entry, Storage, StorageResult},
+    storage::{Storage, StorageResult},
     util::{FlexibleQuorum, NodeId},
     ClusterConfigEC, OmniPaxosECConfig, ServerConfigEC,
 };
@@ -1109,7 +1110,8 @@ pub mod verification {
 }
 
 /// A default log entry struct implementing the LogEntry trait
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Entry, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[snapshot(TestECEntrySnapshot)]
 pub struct TestECEntry {
     /// The type of operation performed on the log entry, e.g., SET or DELETE.
     pub operation: OperationType,
@@ -1117,10 +1119,6 @@ pub struct TestECEntry {
     pub key: String,
     /// The value of the log entry, which is a fragment of the original log entry.
     pub value: EntryFragment,
-}
-
-impl Entry for TestECEntry {
-    type Snapshot = TestECEntrySnapshot;
 }
 
 impl ECEntry for TestECEntry {
@@ -1148,7 +1146,7 @@ impl TestECEntry {
     /// Temporary transitional testing purposes, delete later
     pub fn dummy(number: u64) -> Self {
         let dummy_key = format!("key_{}", number);
-        let dummy_value = EntryFragment::new(number.try_into().unwrap(), vec![0; 10]); // Example fragment with dummy data
+        let dummy_value = EntryFragment::new(number.try_into().unwrap(), vec![0; 1]); // Example fragment with dummy data
 
         TestECEntry::new(OperationType::SET, dummy_key, dummy_value)
     }
@@ -1156,7 +1154,7 @@ impl TestECEntry {
 
 /// Temporary transitional testing purposes, delete later
 /// A snapshot of the TestECEntry log entries, containing the latest entry and all snapshotted entries.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TestECEntrySnapshot {
     /// The latest entry in the snapshot, if available.
     pub latest_entry: Option<TestECEntry>,
@@ -1190,3 +1188,11 @@ impl TestECEntrySnapshot {
         self.snapshotted.iter().any(|x| x.key == key)
     }
 }
+
+impl PartialEq<Self> for TestECEntrySnapshot {
+    fn eq(&self, other: &Self) -> bool {
+        self.latest_entry == other.latest_entry
+    }
+}
+
+impl Eq for TestECEntrySnapshot {}
