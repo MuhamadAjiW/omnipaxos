@@ -15,6 +15,19 @@ impl EntryFragment {
     pub fn new(idx: usize, data: Vec<u8>) -> Self {
         Self { idx, data }
     }
+    /// Creates a new `EntryFragment` for a request with the given data.
+    pub fn for_request(data: Vec<u8>) -> Self {
+        Self { idx: 0, data }
+    }
+}
+
+impl Default for EntryFragment {
+    fn default() -> Self {
+        Self {
+            idx: 0,
+            data: Vec::new(),
+        }
+    }
 }
 
 /// Utility for encoding and decoding log entries using Reed-Solomon erasure coding.

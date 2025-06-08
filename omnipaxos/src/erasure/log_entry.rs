@@ -10,6 +10,8 @@ use crate::{erasure::ec_service::EntryFragment, storage::Entry};
 pub enum OperationType {
     /// A NULL operation, e.g., a placeholder or a non operation in the log. Used for control messages.
     NULL,
+    /// A GET operation, e.g., Retrieval of a value from the log.
+    GET,
     /// A SET operation, e.g., writing a value to the log.
     SET,
     /// A DELETE operation, e.g., removing a value from the log.
@@ -19,6 +21,7 @@ impl fmt::Display for OperationType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let str;
         match self {
+            OperationType::GET => str = "GET",
             OperationType::NULL => str = "NULL",
             OperationType::SET => str = "SET",
             OperationType::DELETE => str = "DEL",
