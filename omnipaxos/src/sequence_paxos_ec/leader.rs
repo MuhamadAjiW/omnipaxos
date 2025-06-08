@@ -18,6 +18,7 @@ where
     /// Handle a new leader. Should be called when the leader election has elected a new leader with the ballot `n`
     /*** Leader ***/
     pub(crate) fn handle_leader(&mut self, n: Ballot) {
+        eprintln!("[TRACE][NODE {}] ENTER handle_leader(n={:?})", self.pid, n);
         if n <= self.leader_state.n_leader || n <= self.internal_storage.get_promise() {
             return;
         }
@@ -64,10 +65,16 @@ where
     }
 
     pub(crate) fn become_follower(&mut self) {
+        eprintln!("[TRACE][NODE {}] ENTER become_follower", self.pid);
+        eprintln!("[NODE {}] become_follower", self.pid);
         self.state.0 = RoleEC::Follower;
     }
 
     pub(crate) fn handle_preparereq(&mut self, prepreq: PrepareReq, from: NodeId) {
+        eprintln!(
+            "[TRACE][NODE {}] ENTER handle_preparereq(from={})",
+            self.pid, from
+        );
         #[cfg(feature = "logging")]
         debug!(self.logger, "Incoming message PrepareReq from {}", from);
         if self.state.0 == RoleEC::Leader && prepreq.n <= self.leader_state.n_leader {
@@ -78,6 +85,14 @@ where
     }
 
     pub(crate) fn handle_forwarded_proposal(&mut self, mut entries: Vec<T>) {
+        eprintln!(
+            "[TRACE][NODE {}] ENTER handle_forwarded_proposal: entries={:?}",
+            self.pid,
+            entries
+                .iter()
+                .map(|e| (e.key(), e.value().idx, &e.value().data))
+                .collect::<Vec<_>>()
+        );
         if !self.accepted_reconfiguration() {
             match self.state {
                 (RoleEC::Leader, PhaseEC::Prepare) => self.buffered_proposals.append(&mut entries),
@@ -88,6 +103,10 @@ where
     }
 
     pub(crate) fn handle_forwarded_stopsign(&mut self, ss: StopSign<ClusterConfigEC>) {
+        eprintln!(
+            "[TRACE][NODE {}] ENTER handle_forwarded_stopsign: stopsign={:?}",
+            self.pid, ss
+        );
         if self.accepted_reconfiguration() {
             return;
         }
@@ -99,6 +118,7 @@ where
     }
 
     pub(crate) fn send_prepare(&mut self, to: NodeId) {
+        eprintln!("[TRACE][NODE {}] ENTER send_prepare(to={})", self.pid, to);
         let prep = Prepare {
             n: self.leader_state.n_leader,
             decided_idx: self.internal_storage.get_decided_idx(),
@@ -113,6 +133,7 @@ where
     }
 
     pub(crate) fn accept_entry_leader(&mut self, entry: T) {
+        eprintln!("[TRACE][LEADER {}] ENTER accept_entry_leader: key={}, op={:?}, fragment.idx={}, fragment.data={:?}", self.pid, entry.key(), entry.operation(), entry.value().idx, entry.value().data);
         let key = entry.key().to_string();
         let op = entry.operation().clone();
         let value_bytes =
@@ -122,11 +143,23 @@ where
             .ec_service
             .encode(&value_bytes)
             .expect("EC encode failed");
+        eprintln!(
+            "[TRACE][LEADER {}] accept_entry_leader: encoded fragments={:?}",
+            self.pid,
+            fragments
+                .iter()
+                .map(|f| (f.idx, &f.data))
+                .collect::<Vec<_>>()
+        );
         // Assign fragment to self
         let my_idx = ECService::fragment_index_for_node(
             self.pid as usize,
             self.internal_storage.get_accepted_idx(),
             total_shards,
+        );
+        eprintln!(
+            "[TRACE][LEADER {}] accept_entry_leader: my_idx={} (pid={})",
+            self.pid, my_idx, self.pid
         );
         let my_entry = T::from_parts(key.clone(), fragments[my_idx].clone(), op.clone());
         let accepted_metadata = self
@@ -143,6 +176,14 @@ where
     }
 
     pub(crate) fn accept_entries_leader(&mut self, entries: Vec<T>) {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER accept_entries_leader: entries={:?}",
+            self.pid,
+            entries
+                .iter()
+                .map(|e| (e.key(), e.value().idx, &e.value().data))
+                .collect::<Vec<_>>()
+        );
         // EC-aware batch accept: encode each entry, store only leader's fragment, send correct fragment to each follower
         let total_shards = self.peers.len() + 1;
         let mut my_entries = Vec::with_capacity(entries.len());
@@ -158,10 +199,24 @@ where
                 .ec_service
                 .encode(&value_bytes)
                 .expect("EC encode failed");
+            eprintln!(
+                "[TRACE][LEADER {}] accept_entries_leader: entry {} key={} fragments={:?}",
+                self.pid,
+                i,
+                key,
+                fragments
+                    .iter()
+                    .map(|f| (f.idx, &f.data))
+                    .collect::<Vec<_>>()
+            );
             let my_idx = ECService::fragment_index_for_node(
                 self.pid as usize,
                 self.internal_storage.get_accepted_idx() + i,
                 total_shards,
+            );
+            eprintln!(
+                "[TRACE][LEADER {}] accept_entries_leader: entry {} my_idx={} (pid={})",
+                self.pid, i, my_idx, self.pid
             );
             let my_entry = T::from_parts(key.clone(), fragments[my_idx].clone(), op.clone());
 
@@ -192,11 +247,16 @@ where
         fragments: Vec<EntryFragment>,
         accepted_idx: usize,
     ) {
+        eprintln!("[TRACE][LEADER {}] ENTER send_acceptdecide: key={}, op={:?}, accepted_idx={}, fragments={:?}", self.pid, key, op, accepted_idx, fragments.iter().map(|f| (f.idx, &f.data)).collect::<Vec<_>>());
         let decided_idx = self.internal_storage.get_decided_idx();
         let total_shards = self.peers.len() + 1;
         for &pid in self.peers.iter() {
             let frag_idx =
                 ECService::fragment_index_for_node(pid as usize, accepted_idx, total_shards);
+            eprintln!(
+                "[TRACE][LEADER {}] send_acceptdecide: to pid={} frag_idx={} fragment={:?}",
+                self.pid, pid, frag_idx, fragments[frag_idx]
+            );
             let entry = T::from_parts(key.clone(), fragments[frag_idx].clone(), op.clone());
             let acc_dec = AcceptDecide {
                 n: self.leader_state.n_leader,
@@ -218,6 +278,12 @@ where
         all_entries: &Vec<(String, OperationType, Vec<EntryFragment>)>,
         start_idx: usize,
     ) {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER send_acceptdecide_batch: start_idx={}, all_entries.len={}",
+            self.pid,
+            start_idx,
+            all_entries.len()
+        );
         let decided_idx = self.internal_storage.get_decided_idx();
         let total_shards = self.peers.len() + 1;
         for &pid in self.peers.iter() {
@@ -225,6 +291,7 @@ where
             for (i, (key, op, fragments)) in all_entries.iter().enumerate() {
                 let frag_idx =
                     ECService::fragment_index_for_node(pid as usize, start_idx + i, total_shards);
+                eprintln!("[TRACE][LEADER {}] send_acceptdecide_batch: to pid={} entry {} frag_idx={} fragment={:?}", self.pid, pid, i, frag_idx, fragments[frag_idx]);
                 entries.push(T::from_parts(
                     key.clone(),
                     fragments[frag_idx].clone(),
@@ -235,8 +302,8 @@ where
                 let acc_dec = AcceptDecide {
                     n: self.leader_state.n_leader,
                     seq_num: self.leader_state.next_seq_num(pid),
-                    decided_idx,
                     entries,
+                    decided_idx,
                 };
                 self.outgoing.push(Message::SequencePaxos(PaxosMessage {
                     from: self.pid,
@@ -249,6 +316,7 @@ where
 
     /// EC-aware log sync: send only the correct fragments for the requested log range
     fn send_accsync(&mut self, to: NodeId) {
+        eprintln!("[TRACE][LEADER {}] ENTER send_accsync to {}", self.pid, to);
         // Follower can have valid accepted entries depending on which leader they were previously following
         let current_n = self.leader_state.n_leader;
         let PromiseMetaData {
@@ -314,6 +382,10 @@ where
     }
 
     pub(crate) fn accept_stopsign_leader(&mut self, ss: StopSign<ClusterConfigEC>) {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER accept_stopsign_leader: stopsign={:?}",
+            self.pid, ss
+        );
         let accepted_metadata = self
             .internal_storage
             .append_stopsign(ss.clone())
@@ -339,6 +411,10 @@ where
     }
 
     fn send_accept_stopsign(&mut self, to: NodeId, ss: StopSign<ClusterConfigEC>, resend: bool) {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER send_accept_stopsign(to={}, resend={})",
+            self.pid, to, resend
+        );
         let seq_num = match resend {
             true => self.leader_state.get_seq_num(to),
             false => self.leader_state.next_seq_num(to),
@@ -356,6 +432,10 @@ where
     }
 
     pub(crate) fn send_decide(&mut self, to: NodeId, decided_idx: usize, resend: bool) {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER send_decide(to={}, decided_idx={}, resend={})",
+            self.pid, to, decided_idx, resend
+        );
         let seq_num = match resend {
             true => self.leader_state.get_seq_num(to),
             false => self.leader_state.next_seq_num(to),
@@ -373,6 +453,10 @@ where
     }
 
     fn handle_majority_promises(&mut self) {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER handle_majority_promises",
+            self.pid
+        );
         let max_promise_sync = self.leader_state.take_max_promise_sync();
         let decided_idx = self.leader_state.get_max_decided_idx();
         let mut new_accepted_idx = self
@@ -407,6 +491,10 @@ where
         prom: Promise<T, ClusterConfigEC>,
         from: NodeId,
     ) {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER handle_promise_prepare(from={})",
+            self.pid, from
+        );
         #[cfg(feature = "logging")]
         debug!(
             self.logger,
@@ -425,6 +513,10 @@ where
         prom: Promise<T, ClusterConfigEC>,
         from: NodeId,
     ) {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER handle_promise_accept(from={})",
+            self.pid, from
+        );
         #[cfg(feature = "logging")]
         {
             let (r, p) = &self.state;
@@ -440,6 +532,10 @@ where
     }
 
     pub(crate) fn handle_accepted(&mut self, accepted: Accepted, from: NodeId) {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER handle_accepted(from={})",
+            self.pid, from
+        );
         #[cfg(feature = "logging")]
         trace!(
             self.logger,
@@ -473,6 +569,10 @@ where
     }
 
     fn get_latest_accdec_message(&mut self, to: NodeId) -> Option<&mut AcceptDecide<T>> {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER get_latest_accdec_message(to={})",
+            self.pid, to
+        );
         if let Some((bal, outgoing_idx)) = self.leader_state.get_latest_accept_meta(to) {
             if bal == self.leader_state.n_leader {
                 if let Message::SequencePaxos(PaxosMessage {
@@ -491,12 +591,17 @@ where
     }
 
     pub(crate) fn handle_notaccepted(&mut self, not_acc: NotAccepted, from: NodeId) {
+        eprintln!(
+            "[TRACE][LEADER {}] ENTER handle_notaccepted(from={})",
+            self.pid, from
+        );
         if self.state.0 == RoleEC::Leader && self.leader_state.n_leader < not_acc.n {
             self.leader_state.lost_promise(from);
         }
     }
 
     pub(crate) fn resend_messages_leader(&mut self) {
+        eprintln!("[TRACE][LEADER {}] ENTER resend_messages_leader", self.pid);
         match self.state.1 {
             PhaseEC::Prepare => {
                 // Resend Prepare
@@ -532,6 +637,7 @@ where
 
     // EC-aware: reconstruct (key, op, fragments) for each entry in the batch
     pub(crate) fn flush_batch_leader(&mut self) {
+        eprintln!("[TRACE][LEADER {}] ENTER flush_batch_leader", self.pid);
         let accepted_metadata = self
             .internal_storage
             .flush_batch_and_get_entries()

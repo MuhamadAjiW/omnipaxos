@@ -1,5 +1,5 @@
 use crate::ec::ECKeyValue;
-use omnipaxos::{messages::Message, util::NodeId, ClusterConfig};
+use omnipaxos::{messages::Message, util::NodeId, ClusterConfigEC};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -7,18 +7,18 @@ use std::{
 
 use crate::{
     util::{OUTGOING_MESSAGE_PERIOD, TICK_PERIOD},
-    OmniPaxosKV,
+    OmniPaxosECKV,
 };
 use tokio::{sync::mpsc, time};
 
-pub struct OmniPaxosServer {
-    pub omni_paxos: Arc<Mutex<OmniPaxosKV>>,
-    pub incoming: mpsc::Receiver<Message<ECKeyValue, ClusterConfig>>,
-    pub outgoing: HashMap<NodeId, mpsc::Sender<Message<ECKeyValue, ClusterConfig>>>,
-    pub message_buffer: Vec<Message<ECKeyValue, ClusterConfig>>,
+pub struct OmniPaxosServerEC {
+    pub omni_paxos: Arc<Mutex<OmniPaxosECKV>>,
+    pub incoming: mpsc::Receiver<Message<ECKeyValue, ClusterConfigEC>>,
+    pub outgoing: HashMap<NodeId, mpsc::Sender<Message<ECKeyValue, ClusterConfigEC>>>,
+    pub message_buffer: Vec<Message<ECKeyValue, ClusterConfigEC>>,
 }
 
-impl OmniPaxosServer {
+impl OmniPaxosServerEC {
     async fn send_outgoing_msgs(&mut self) {
         self.omni_paxos
             .lock()

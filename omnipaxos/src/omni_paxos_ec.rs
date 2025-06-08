@@ -252,7 +252,8 @@ impl Default for ServerConfigEC {
             logger_file_path: None,
             #[cfg(feature = "logging")]
             custom_logger: None,
-            erasure_coding_service: ECService::new(1, 0).unwrap(),
+            erasure_coding_service: ECService::new(1, 1)
+                .expect("Missing erasure coding service configuration"),
         }
     }
 }
