@@ -84,10 +84,12 @@ where
     }
 
     fn forward_buffered_proposals(&mut self) {
-        let proposals = std::mem::take(&mut self.buffered_proposals);
-        if !proposals.is_empty() {
-            self.forward_proposals(proposals);
+        if self.buffered_proposals.is_empty() {
+            return;
         }
+        // Use drain(..) to move proposals efficiently
+        let proposals: Vec<T> = self.buffered_proposals.drain(..).collect();
+        self.forward_proposals(proposals);
     }
 
     pub(crate) fn handle_acceptdecide(&mut self, acc_dec: AcceptDecide<T>) {
@@ -99,6 +101,7 @@ where
             let entries = acc_dec.entries;
             #[cfg(feature = "unicache")]
             let entries = self.internal_storage.decode_entries(acc_dec.entries);
+            // Use entries directly, avoid extra Vec
             let mut new_accepted_idx = self
                 .internal_storage
                 .append_entries_and_get_accepted_idx(entries)
