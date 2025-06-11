@@ -15,7 +15,7 @@ use crate::{
     ClusterConfigEC, CompactionErrEC, OmniPaxosECConfig, ProposeErrEC,
 };
 #[cfg(feature = "logging")]
-use slog::{debug, info, trace, warn, Logger};
+use slog::{info, trace, warn, Logger};
 use std::{fmt::Debug, vec};
 
 pub mod follower;

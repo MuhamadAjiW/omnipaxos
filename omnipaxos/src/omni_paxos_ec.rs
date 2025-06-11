@@ -13,8 +13,6 @@ use crate::{
     ClusterConfig, OmniPaxosConfig, ServerConfig,
 };
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "logging")]
-use slog::info;
 #[cfg(feature = "toml_config")]
 use std::fs;
 use std::{

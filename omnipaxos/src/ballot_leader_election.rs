@@ -112,8 +112,7 @@ impl BallotLeaderElection {
                 initial_ballot.n = RECOVERY_ROUND;
                 b
             }
-            // Start with a default ballot with 0 priority as leader, not assuming self is leader
-            _ => Ballot::with(config_id, 0, 0, 0), // Use 0 as a placeholder until election
+            _ => initial_ballot,
         };
         let mut ble = BallotLeaderElection {
             configuration_id: config_id,
@@ -124,7 +123,7 @@ impl BallotLeaderElection {
             prev_replies: Vec::with_capacity(num_nodes),
             current_ballot: initial_ballot,
             leader: initial_leader,
-            happy: false, // Start unhappy until a proper leader is elected
+            happy: true,
             quorum,
             outgoing: Vec::with_capacity(config.buffer_size),
             #[cfg(feature = "logging")]
@@ -203,90 +202,54 @@ impl BallotLeaderElection {
         self.update_happiness(seq_paxos_state);
         self.check_takeover();
         self.new_hb_round();
-        
         if seq_paxos_promise > self.leader {
             // Sync leader with Paxos promise in case ballot didn't make it to BLE followers
             // or become_leader() was called.
-            #[cfg(feature = "logging")]
-            trace!(
-                self.logger,
-                "Syncing leader from BLE {:?} to Paxos promise {:?}",
-                self.leader,
-                seq_paxos_promise
-            );
-            
             self.leader = seq_paxos_promise;
             if seq_paxos_promise.pid == self.pid {
                 self.current_ballot = seq_paxos_promise;
             }
             self.happy = true;
         }
-
-        // Additional stability check: require multiple heartbeat rounds before confirming leadership
-        let required_rounds = 2; // Require at least 2 completed heartbeat rounds
-        let has_completed_required_rounds = self.hb_round >= required_rounds;
-        
-        // To be considered a leader, a node must meet multiple criteria:
-        // 1. Its ballot must be the current leader ballot
-        // 2. It must be happy (confirmed through quorum)
-        // 3. It must have received replies from at least one heartbeat round
-        // 4. The leader ballot's pid must match this node's pid (preventing 0 pid confusion)
-        // 5. It must have completed at least the required number of heartbeat rounds
-        if self.leader == self.current_ballot
-            && self.happy
-            && !self.prev_replies.is_empty()
-            && self.leader.pid == self.pid
-            && has_completed_required_rounds
-        {
-            // Only log when first becoming leader or on occasional heartbeats to reduce noise
-            #[cfg(feature = "logging")]
-            if self.hb_round == required_rounds || self.hb_round % 10 == 0 {
-                info!(
-                    self.logger,
-                    "Confirmed as leader with ballot {:?}", self.current_ballot
-                );
-            }
-            
+        if self.leader == self.current_ballot {
             Some(self.current_ballot)
         } else {
             None
         }
-    }    fn update_leader(&mut self) {
+    }
+
+    fn update_leader(&mut self) {
         let max_reply_ballot = self.heartbeat_replies.iter().map(|r| r.ballot).max();
         if let Some(max) = max_reply_ballot {
-            // Only update leader if we receive a higher ballot OR 
-            // if we receive the same ballot from the legitimate leader
-            if max > self.leader || (max == self.leader && max.pid != 0 && max.pid != self.pid) {
-                #[cfg(feature = "logging")]
-                trace!(
-                    self.logger,
-                    "Updating leader from {:?} to {:?}",
-                    self.leader,
-                    max
-                );
-                
+            if max > self.leader {
                 self.leader = max;
-                
-                // If we see a leader with a higher ballot, we're no longer the leader
-                if self.leader != self.current_ballot {
-                    self.happy = false;
-                }
             }
         }
     }
 
     fn update_happiness(&mut self, seq_paxos_state: &(Role, Phase)) {
-        // Only consider self happy if we are the leader and can form a quorum
         self.happy = if self.leader == self.current_ballot {
+            let potential_followers = self
+                .heartbeat_replies
+                .iter()
+                .filter(|hb_reply| hb_reply.leader <= self.current_ballot)
+                .count();
             let can_form_quorum = match seq_paxos_state {
-                (Role::Leader, Phase::Accept) => self
-                    .quorum
-                    .is_accept_quorum(self.heartbeat_replies.len() + 1),
-                _ => false, // fallback
+                (Role::Leader, Phase::Accept) => {
+                    self.quorum.is_accept_quorum(potential_followers + 1)
+                }
+                _ => self.quorum.is_prepare_quorum(potential_followers + 1),
             };
-            can_form_quorum
+            if can_form_quorum {
+                true
+            } else {
+                let see_larger_happy_leader = self
+                    .heartbeat_replies
+                    .iter()
+                    .any(|r| r.leader > self.current_ballot && r.happy);
+                see_larger_happy_leader
+            }
         } else {
-            // Only happy if we see a happy reply from the current leader
             self.heartbeat_replies
                 .iter()
                 .any(|r| r.ballot == self.leader && r.happy)
@@ -299,40 +262,12 @@ impl BallotLeaderElection {
             let im_quorum_connected = self
                 .quorum
                 .is_prepare_quorum(self.heartbeat_replies.len() + 1);
-
-            // Additional condition to help with leader convergence:
-            // Only attempt to take over if we have a higher PID than any node we've heard from
-            // This creates a deterministic ordering for leader election
-            let highest_pid_node = self
-                .heartbeat_replies
-                .iter()
-                .map(|r| r.ballot.pid)
-                .max()
-                .unwrap_or(0);
-                
-            // Delay takeover attempts based on PID to avoid simultaneous leadership claims
-            // Higher PID nodes get to attempt takeover first
-            let should_attempt_takeover = 
-                all_neighbors_unhappy && 
-                im_quorum_connected && 
-                (self.pid > highest_pid_node || self.heartbeat_replies.is_empty()) &&
-                // Only take over if we've completed at least one full heartbeat round
-                // This gives time for initial messages to propagate
-                !self.prev_replies.is_empty();
-                
-            if should_attempt_takeover {
+            if all_neighbors_unhappy && im_quorum_connected {
                 // We increment past our leader instead of max of unhappy ballots because we
                 // assume we have already checked leader for this round so they should be equal
                 self.current_ballot.n = self.leader.n + 1;
                 self.leader = self.current_ballot;
                 self.happy = true;
-
-                #[cfg(feature = "logging")]
-                trace!(
-                    self.logger,
-                    "Taking over leadership with ballot {:?}",
-                    self.current_ballot
-                );
             }
         }
     }
