@@ -157,12 +157,11 @@ where
         );
         let key = entry.key().to_string();
         let op = entry.operation().clone();
-        let value_bytes =
-            bincode::serialize(entry.value()).expect("ECEntry value must be serializable");
         let total_shards = self.peers.len() + 1;
+
         let fragments = self
             .ec_service
-            .encode(&value_bytes)
+            .encode(&entry.value().data)
             .expect("EC encode failed");
         #[cfg(feature = "logging")]
         info!(
@@ -431,10 +430,10 @@ where
             .expect(WRITE_ERROR_MSG);
         if let Some(_metadata) = accepted_metadata {
             // Encode the stopsign as a value and send only the correct fragment to each follower
-            let value_bytes = bincode::serialize(&ss).expect("StopSign must be serializable");
+            let stopsign_bytes = bincode::serialize(&ss).expect("StopSign must be serializable");
             let fragments = self
                 .ec_service
-                .encode(&value_bytes)
+                .encode(&stopsign_bytes)
                 .expect("EC encode failed");
             let key = "stopsign".to_string();
             // Operation is null because it is a control message
