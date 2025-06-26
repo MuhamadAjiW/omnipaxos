@@ -12,6 +12,8 @@ pub enum OperationType {
     NULL,
     /// A GET operation, e.g., Retrieval of a value from the log.
     GET,
+    /// A GET operation that requires reconstruction from all fragments.
+    RECONSTRUCT,
     /// A SET operation, e.g., writing a value to the log.
     SET,
     /// A DELETE operation, e.g., removing a value from the log.
@@ -22,6 +24,7 @@ impl fmt::Display for OperationType {
         let str;
         match self {
             OperationType::GET => str = "GET",
+            OperationType::RECONSTRUCT => str = "GET_RECONSTRUCT",
             OperationType::NULL => str = "NULL",
             OperationType::SET => str = "SET",
             OperationType::DELETE => str = "DEL",

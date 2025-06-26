@@ -327,6 +327,11 @@ where
         self.seq_paxos.get_promise()
     }
 
+    /// Returns a reference to the ECService (erasure coding parameters and decoding)
+    pub fn ec_service(&self) -> &ECService {
+        &self.seq_paxos.ec_service
+    }
+
     /// Moves outgoing messages from this server into the buffer. The messages should then be sent via the network implementation.
     pub fn take_outgoing_messages(&mut self, buffer: &mut Vec<Message<T, ClusterConfigEC>>) {
         self.seq_paxos.take_outgoing_msgs(buffer);
