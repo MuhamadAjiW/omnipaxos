@@ -15,7 +15,7 @@ struct SyncTest {
     leaders_log: Vec<Value>,
     leaders_dec_idx: usize,
     leaders_compacted_idx: Option<usize>,
-    leaders_ss: Option<StopSign>,
+    leaders_ss: Option<StopSign<ClusterConfig>>,
     followers_log: Vec<Value>,
     followers_dec_idx: usize,
     followers_compacted_idx: Option<usize>,

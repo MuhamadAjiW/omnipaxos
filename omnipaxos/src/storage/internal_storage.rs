@@ -1,7 +1,10 @@
 use super::state_cache::StateCache;
 use crate::{
     ballot_leader_election::Ballot,
-    storage::{Entry, Snapshot, SnapshotType, StopSign, Storage, StorageOp, StorageResult},
+    storage::{
+        ClusterConfigTrait, Entry, Snapshot, SnapshotType, StopSign, Storage, StorageOp,
+        StorageResult,
+    },
     util::{AcceptedMetaData, IndexEntry, LogEntry, LogSync, SnapshottedEntry},
     CompactionErr,
 };
@@ -19,20 +22,21 @@ pub(crate) struct InternalStorageConfig {
 
 /// Internal representation of storage. Serves as the interface between Sequence Paxos and the
 /// storage back-end.
-pub(crate) struct InternalStorage<I, T>
+pub(crate) struct InternalStorage<I, T, C>
 where
-    I: Storage<T>,
+    I: Storage<T, C>,
     T: Entry,
+    C: ClusterConfigTrait,
 {
     storage: I,
-    state_cache: StateCache<T>,
+    state_cache: StateCache<T, C>,
     _t: PhantomData<T>,
 }
-
-impl<I, T> InternalStorage<I, T>
+impl<I, T, C> InternalStorage<I, T, C>
 where
-    I: Storage<T>,
+    I: Storage<T, C>,
     T: Entry,
+    C: ClusterConfigTrait,
 {
     pub(crate) fn with(
         storage: I,
@@ -77,7 +81,7 @@ where
     pub(crate) fn read_decided_suffix(
         &self,
         from_idx: usize,
-    ) -> StorageResult<Option<Vec<LogEntry<T>>>> {
+    ) -> StorageResult<Option<Vec<LogEntry<T, C>>>> {
         let decided_idx = self.get_decided_idx();
         if from_idx < decided_idx {
             self.read(from_idx..decided_idx)
@@ -87,7 +91,7 @@ where
     }
 
     /// Read entries in the range `r` in the log. Returns `None` if `r` is out of bounds.
-    pub(crate) fn read<R>(&self, r: R) -> StorageResult<Option<Vec<LogEntry<T>>>>
+    pub(crate) fn read<R>(&self, r: R) -> StorageResult<Option<Vec<LogEntry<T, C>>>>
     where
         R: RangeBounds<usize>,
     {
@@ -161,7 +165,7 @@ where
         idx: usize,
         compacted_idx: usize,
         accepted_idx: usize,
-    ) -> StorageResult<Option<IndexEntry>> {
+    ) -> StorageResult<Option<IndexEntry<C>>> {
         if idx < compacted_idx {
             Ok(Some(IndexEntry::Compacted))
         } else if idx + 1 < accepted_idx {
@@ -176,7 +180,11 @@ where
         }
     }
 
-    fn create_read_log_entries(&self, from: usize, to: usize) -> StorageResult<Vec<LogEntry<T>>> {
+    fn create_read_log_entries(
+        &self,
+        from: usize,
+        to: usize,
+    ) -> StorageResult<Vec<LogEntry<T, C>>> {
         let decided_idx = self.get_decided_idx();
         let entries = self
             .get_entries(from, to)?
@@ -194,7 +202,7 @@ where
         Ok(entries)
     }
 
-    fn create_compacted_entry(&self, compacted_idx: usize) -> StorageResult<LogEntry<T>> {
+    fn create_compacted_entry(&self, compacted_idx: usize) -> StorageResult<LogEntry<T, C>> {
         self.storage.get_snapshot().map(|snap| match snap {
             Some(s) => LogEntry::Snapshotted(SnapshottedEntry::with(compacted_idx, s)),
             None => LogEntry::Trimmed(compacted_idx),
@@ -225,7 +233,7 @@ where
     // associated with any flushed entries if there were any.
     pub(crate) fn append_stopsign(
         &mut self,
-        ss: StopSign,
+        ss: StopSign<C>,
     ) -> StorageResult<Option<AcceptedMetaData<T>>> {
         let append_res = self.state_cache.append_stopsign(ss.clone());
         let accepted_entries_metadata = self.flush_if_full_batch(append_res)?;
@@ -314,11 +322,11 @@ where
         &mut self,
         accepted_round: Ballot,
         decided_idx: usize,
-        log_sync: Option<LogSync<T>>,
+        log_sync: Option<LogSync<T, C>>,
     ) -> StorageResult<usize> {
         self.state_cache.accepted_round = accepted_round;
         self.state_cache.decided_idx = decided_idx;
-        let mut sync_txn: Vec<StorageOp<T>> = vec![
+        let mut sync_txn: Vec<StorageOp<T, C>> = vec![
             StorageOp::SetAcceptedRound(accepted_round),
             StorageOp::SetDecidedIndex(decided_idx),
         ];
@@ -494,7 +502,7 @@ where
         self.state_cache.promise
     }
 
-    pub(crate) fn set_stopsign(&mut self, ss: Option<StopSign>) -> StorageResult<usize> {
+    pub(crate) fn set_stopsign(&mut self, ss: Option<StopSign<C>>) -> StorageResult<usize> {
         if ss.is_some() && self.state_cache.stopsign.is_none() {
             self.state_cache.accepted_idx += 1;
         } else if ss.is_none() && self.state_cache.stopsign.is_some() {
@@ -505,7 +513,7 @@ where
         Ok(self.state_cache.accepted_idx)
     }
 
-    pub(crate) fn get_stopsign(&self) -> Option<StopSign> {
+    pub(crate) fn get_stopsign(&self) -> Option<StopSign<C>> {
         self.state_cache.stopsign.clone()
     }
 

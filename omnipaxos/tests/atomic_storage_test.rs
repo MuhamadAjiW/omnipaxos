@@ -27,7 +27,7 @@ use omnipaxos::{
     },
     storage::{Snapshot, SnapshotType, Storage},
     util::{LogSync, NodeId, SequenceNumber},
-    OmniPaxos, OmniPaxosConfig,
+    ClusterConfig, OmniPaxos, OmniPaxosConfig,
 };
 use omnipaxos_storage::memory_storage::MemoryStorage;
 use serial_test::serial;
@@ -37,7 +37,7 @@ use std::{
 };
 use utils::{BrokenStorageConfig, TestConfig, Value, ValueSnapshot};
 
-type MemoryStore = Arc<Mutex<MemoryStorage<Value>>>;
+type MemoryStore = Arc<Mutex<MemoryStorage<Value, ClusterConfig>>>;
 type BrokenStore = Arc<Mutex<BrokenStorageConfig>>;
 
 /// Creates a new OmniPaxos instance with `BrokenStorage` in its initial state.
@@ -75,7 +75,7 @@ fn _setup_leader() -> (
     let (mem_storage, storage_conf, mut op) = setup_follower();
     let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();
     let n_old = n;
-    let setup_msg = Message::<Value>::BLE(BLEMessage {
+    let setup_msg = Message::<Value, ClusterConfig>::BLE(BLEMessage {
         from: 2,
         to: 1,
         msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -87,7 +87,7 @@ fn _setup_leader() -> (
     });
     op.handle_incoming(setup_msg);
     op.tick(); // trigger leader change
-    let setup_msg = Message::<Value>::BLE(BLEMessage {
+    let setup_msg = Message::<Value, ClusterConfig>::BLE(BLEMessage {
         from: 2,
         to: 1,
         msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -99,7 +99,7 @@ fn _setup_leader() -> (
     });
     op.handle_incoming(setup_msg);
     op.tick(); // trigger leader change
-    let setup_msg = Message::<Value>::BLE(BLEMessage {
+    let setup_msg = Message::<Value, ClusterConfig>::BLE(BLEMessage {
         from: 2,
         to: 1,
         msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -120,7 +120,7 @@ fn _setup_leader() -> (
             }
         }
     }
-    let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+    let setup_msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
         from: 2,
         to: 1,
         msg: PaxosMsg::Promise(Promise {
@@ -153,7 +153,7 @@ fn setup_follower() -> (
     n.config_id = 1;
     n.n += 1;
     n.pid = 2;
-    let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+    let setup_msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
         from: 2,
         to: 1,
         msg: PaxosMsg::Prepare(Prepare {
@@ -174,7 +174,7 @@ fn setup_follower() -> (
         session: 1,
         counter: 1,
     };
-    let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+    let setup_msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
         from: 2,
         to: 1,
         msg: PaxosMsg::AcceptSync(AcceptSync {
@@ -208,7 +208,7 @@ fn atomic_storage_acceptsync_test() {
         let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();
         n.n += 1;
         n.pid = 2;
-        let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let setup_msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::Prepare(Prepare {
@@ -231,7 +231,7 @@ fn atomic_storage_acceptsync_test() {
             .unwrap()
             .schedule_failure_in(fail_after_n_ops);
 
-        let msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::AcceptSync(AcceptSync {
@@ -273,7 +273,7 @@ fn atomic_storage_trim_test() {
     fn run_single_test(fail_after_n_ops: usize) {
         let (mem_storage, storage_conf, mut op) = setup_follower();
 
-        let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let setup_msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::AcceptDecide(AcceptDecide {
@@ -303,7 +303,7 @@ fn atomic_storage_trim_test() {
             .schedule_failure_in(fail_after_n_ops);
 
         // Test handle Trim
-        let msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::Compaction(Compaction::Trim(4)),
@@ -337,7 +337,7 @@ fn atomic_storage_snapshot_test() {
     fn run_single_test(fail_after_n_ops: usize) {
         let (mem_storage, storage_conf, mut op) = setup_follower();
 
-        let setup_msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let setup_msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::AcceptDecide(AcceptDecide {
@@ -367,7 +367,7 @@ fn atomic_storage_snapshot_test() {
             .schedule_failure_in(fail_after_n_ops);
 
         // Test handle Snapshot
-        let msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::Compaction(Compaction::Snapshot(Some(4))),
@@ -415,7 +415,7 @@ fn atomic_storage_accept_decide_test() {
             .schedule_failure_in(fail_after_n_ops);
 
         // Test handle AcceptDecide
-        let msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::AcceptDecide(AcceptDecide {
@@ -462,7 +462,7 @@ fn atomic_storage_majority_promises_test() {
         let mut n = mem_storage.lock().unwrap().get_promise().unwrap().unwrap();
         // Send messages to 1 such that it tries to take over leadership
         let n_old = n;
-        let setup_msg = Message::<Value>::BLE(BLEMessage {
+        let setup_msg = Message::<Value, ClusterConfig>::BLE(BLEMessage {
             from: 2,
             to: 1,
             msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -474,7 +474,7 @@ fn atomic_storage_majority_promises_test() {
         });
         op.handle_incoming(setup_msg);
         op.tick();
-        let setup_msg = Message::<Value>::BLE(BLEMessage {
+        let setup_msg = Message::<Value, ClusterConfig>::BLE(BLEMessage {
             from: 2,
             to: 1,
             msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -485,7 +485,7 @@ fn atomic_storage_majority_promises_test() {
             }),
         });
         op.handle_incoming(setup_msg);
-        let setup_msg = Message::<Value>::BLE(BLEMessage {
+        let setup_msg = Message::<Value, ClusterConfig>::BLE(BLEMessage {
             from: 3,
             to: 1,
             msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -501,7 +501,7 @@ fn atomic_storage_majority_promises_test() {
         let mut n_new = n_old;
         n_new.n += 1;
         n_new.pid = 1;
-        let setup_msg = Message::<Value>::BLE(BLEMessage {
+        let setup_msg = Message::<Value, ClusterConfig>::BLE(BLEMessage {
             from: 2,
             to: 1,
             msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -512,7 +512,7 @@ fn atomic_storage_majority_promises_test() {
             }),
         });
         op.handle_incoming(setup_msg);
-        let setup_msg = Message::<Value>::BLE(BLEMessage {
+        let setup_msg = Message::<Value, ClusterConfig>::BLE(BLEMessage {
             from: 3,
             to: 1,
             msg: HeartbeatMsg::Reply(HeartbeatReply {
@@ -543,7 +543,7 @@ fn atomic_storage_majority_promises_test() {
             .unwrap()
             .schedule_failure_in(fail_after_n_ops);
 
-        let msg = Message::<Value>::SequencePaxos(PaxosMessage {
+        let msg = Message::<Value, ClusterConfig>::SequencePaxos(PaxosMessage {
             from: 2,
             to: 1,
             msg: PaxosMsg::Promise(Promise {

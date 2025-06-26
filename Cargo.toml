@@ -7,6 +7,7 @@ members = [
     "omnipaxos_ui",
     "examples/kv_store",
     "examples/dashboard",
+    "examples/erasure_coding",
 ]
 
 [profile.release]

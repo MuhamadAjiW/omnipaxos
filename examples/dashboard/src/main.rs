@@ -12,7 +12,7 @@ mod entry;
 mod server;
 mod util;
 
-type OmniPaxosLog = OmniPaxos<LogEntry, MemoryStorage<LogEntry>>;
+type OmniPaxosLog = OmniPaxos<LogEntry, MemoryStorage<LogEntry, ClusterConfig>>;
 
 /// Here is the main function for the dashboard example. Including the nodes setup, and the main loop.
 /// There will be a dashboard UI showing the status from the view of one node in the terminal, and in

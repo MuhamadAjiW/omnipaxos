@@ -8,12 +8,9 @@ use crate::{
         defaults::{BUFFER_SIZE, ELECTION_TIMEOUT, FLUSH_BATCH_TIMEOUT, RESEND_MESSAGE_TIMEOUT},
         ConfigurationId, FlexibleQuorum, LogEntry, LogicalClock, NodeId,
     },
-    utils::{ui, ui::ClusterState},
+    utils::ui::{self, ClusterState},
 };
-#[cfg(any(feature = "toml_config", feature = "serde"))]
-use serde::Deserialize;
-#[cfg(feature = "serde")]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "toml_config")]
 use std::fs;
 use std::{
@@ -61,7 +58,7 @@ impl OmniPaxosConfig {
     pub fn build<T, B>(self, storage: B) -> Result<OmniPaxos<T, B>, ConfigError>
     where
         T: Entry,
-        B: Storage<T>,
+        B: Storage<T, ClusterConfig>,
     {
         self.validate()?;
         // Use stored ballot as initial BLE leader
@@ -85,10 +82,8 @@ impl OmniPaxosConfig {
 /// * `configuration_id`: The identifier for the cluster configuration that this OmniPaxos server is part of.
 /// * `nodes`: The nodes in the cluster i.e. the `pid`s of the other servers in the configuration.
 /// * `flexible_quorum` : Defines read and write quorum sizes. Can be used for different latency vs fault tolerance tradeoffs.
-#[derive(Clone, Debug, PartialEq, Default)]
-#[cfg_attr(any(feature = "serde", feature = "toml_config"), derive(Deserialize))]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "toml_config", serde(default))]
-#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ClusterConfig {
     /// The identifier for the cluster configuration that this OmniPaxos server is part of. Must
     /// not be 0 and be greater than the previous configuration's id.
@@ -139,7 +134,7 @@ impl ClusterConfig {
     ) -> Result<OmniPaxos<T, B>, ConfigError>
     where
         T: Entry,
-        B: Storage<T>,
+        B: Storage<T, ClusterConfig>,
     {
         let op_config = OmniPaxosConfig {
             cluster_config: self,
@@ -225,7 +220,7 @@ impl Default for ServerConfig {
 pub struct OmniPaxos<T, B>
 where
     T: Entry,
-    B: Storage<T>,
+    B: Storage<T, ClusterConfig>,
 {
     seq_paxos: SequencePaxos<T, B>,
     ble: BallotLeaderElection,
@@ -237,7 +232,7 @@ where
 impl<T, B> OmniPaxos<T, B>
 where
     T: Entry,
-    B: Storage<T>,
+    B: Storage<T, ClusterConfig>,
 {
     /// Initiates the trim process.
     /// # Arguments
@@ -290,13 +285,13 @@ where
     }
 
     /// Moves outgoing messages from this server into the buffer. The messages should then be sent via the network implementation.
-    pub fn take_outgoing_messages(&mut self, buffer: &mut Vec<Message<T>>) {
+    pub fn take_outgoing_messages(&mut self, buffer: &mut Vec<Message<T, ClusterConfig>>) {
         self.seq_paxos.take_outgoing_msgs(buffer);
         buffer.extend(self.ble.outgoing_mut().drain(..).map(|b| Message::BLE(b)));
     }
 
     /// Read entry at index `idx` in the log. Returns `None` if `idx` is out of bounds.
-    pub fn read(&self, idx: usize) -> Option<LogEntry<T>> {
+    pub fn read(&self, idx: usize) -> Option<LogEntry<T, ClusterConfig>> {
         match self
             .seq_paxos
             .internal_storage
@@ -309,7 +304,7 @@ where
     }
 
     /// Read entries in the range `r` in the log. Returns `None` if `r` is out of bounds.
-    pub fn read_entries<R>(&self, r: R) -> Option<Vec<LogEntry<T>>>
+    pub fn read_entries<R>(&self, r: R) -> Option<Vec<LogEntry<T, ClusterConfig>>>
     where
         R: RangeBounds<usize>,
     {
@@ -320,7 +315,7 @@ where
     }
 
     /// Read all decided entries starting at `from_idx` (inclusive) in the log. Returns `None` if `from_idx` is out of bounds.
-    pub fn read_decided_suffix(&self, from_idx: usize) -> Option<Vec<LogEntry<T>>> {
+    pub fn read_decided_suffix(&self, from_idx: usize) -> Option<Vec<LogEntry<T, ClusterConfig>>> {
         self.seq_paxos
             .internal_storage
             .read_decided_suffix(from_idx)
@@ -328,7 +323,7 @@ where
     }
 
     /// Handle an incoming message
-    pub fn handle_incoming(&mut self, m: Message<T>) {
+    pub fn handle_incoming(&mut self, m: Message<T, ClusterConfig>) {
         match m {
             Message::SequencePaxos(p) => self.seq_paxos.handle(p),
             Message::BLE(b) => self.ble.handle(b),
@@ -336,7 +331,7 @@ where
     }
 
     /// Returns whether this Sequence Paxos has been reconfigured
-    pub fn is_reconfigured(&self) -> Option<StopSign> {
+    pub fn is_reconfigured(&self) -> Option<StopSign<ClusterConfig>> {
         self.seq_paxos.is_reconfigured()
     }
 

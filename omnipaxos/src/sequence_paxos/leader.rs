@@ -9,7 +9,7 @@ use super::*;
 impl<T, B> SequencePaxos<T, B>
 where
     T: Entry,
-    B: Storage<T>,
+    B: Storage<T, ClusterConfig>,
 {
     /// Handle a new leader. Should be called when the leader election has elected a new leader with the ballot `n`
     /*** Leader ***/
@@ -83,7 +83,7 @@ where
         }
     }
 
-    pub(crate) fn handle_forwarded_stopsign(&mut self, ss: StopSign) {
+    pub(crate) fn handle_forwarded_stopsign(&mut self, ss: StopSign<ClusterConfig>) {
         if self.accepted_reconfiguration() {
             return;
         }
@@ -132,7 +132,7 @@ where
         }
     }
 
-    pub(crate) fn accept_stopsign_leader(&mut self, ss: StopSign) {
+    pub(crate) fn accept_stopsign_leader(&mut self, ss: StopSign<ClusterConfig>) {
         let accepted_metadata = self
             .internal_storage
             .append_stopsign(ss.clone())
@@ -220,7 +220,7 @@ where
         }
     }
 
-    fn send_accept_stopsign(&mut self, to: NodeId, ss: StopSign, resend: bool) {
+    fn send_accept_stopsign(&mut self, to: NodeId, ss: StopSign<ClusterConfig>, resend: bool) {
         let seq_num = match resend {
             true => self.leader_state.get_seq_num(to),
             false => self.leader_state.next_seq_num(to),
@@ -284,7 +284,7 @@ where
         }
     }
 
-    pub(crate) fn handle_promise_prepare(&mut self, prom: Promise<T>, from: NodeId) {
+    pub(crate) fn handle_promise_prepare(&mut self, prom: Promise<T, ClusterConfig>, from: NodeId) {
         #[cfg(feature = "logging")]
         debug!(
             self.logger,
@@ -298,7 +298,7 @@ where
         }
     }
 
-    pub(crate) fn handle_promise_accept(&mut self, prom: Promise<T>, from: NodeId) {
+    pub(crate) fn handle_promise_accept(&mut self, prom: Promise<T, ClusterConfig>, from: NodeId) {
         #[cfg(feature = "logging")]
         {
             let (r, p) = &self.state;

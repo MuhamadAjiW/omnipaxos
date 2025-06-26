@@ -4,18 +4,18 @@ mod state_cache;
 use super::ballot_leader_election::Ballot;
 #[cfg(feature = "unicache")]
 use crate::unicache::*;
-use crate::ClusterConfig;
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt::Debug};
 
+/// Trait for cluster configuration. It is used to define the cluster configuration for OmniPaxos.
+/// Depends on the kind of paxos you are using, e.g., OmniPaxos or OmniPaxosEC.
+pub trait ClusterConfigTrait: Clone + Debug + Serialize + PartialEq {}
+
+impl ClusterConfigTrait for crate::ClusterConfig {}
+impl ClusterConfigTrait for crate::omni_paxos_ec::ClusterConfigEC {}
+
 /// Type of the entries stored in the log.
 pub trait Entry: Clone + Debug {
-    #[cfg(not(feature = "serde"))]
-    /// The snapshot type for this entry type.
-    type Snapshot: Snapshot<Self>;
-
-    #[cfg(feature = "serde")]
     /// The snapshot type for this entry type.
     type Snapshot: Snapshot<Self> + Serialize + for<'a> Deserialize<'a>;
 
@@ -29,35 +29,27 @@ pub trait Entry: Clone + Debug {
     /// The type representing the **NOT** encodable parts of an `Entry`. Any `NotEncodable` data will be transmitted in its original form, without encoding. It can be set to `()` if the whole `Entry` is cachable. See docs of `pre_process()` for an example.
     type NotEncodable: NotEncodable;
 
-    #[cfg(all(feature = "unicache", not(feature = "serde")))]
-    /// The type that represents if there was a cache hit or miss in UniCache.
-    type EncodeResult: Clone + Debug;
-
-    #[cfg(all(feature = "unicache", feature = "serde"))]
+    #[cfg(all(feature = "unicache"))]
     /// The type that represents the results of trying to encode i.e., if there was a cache hit or miss in UniCache.
     type EncodeResult: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
 
-    #[cfg(all(feature = "unicache", not(feature = "serde")))]
-    /// The type that represents the results of trying to encode i.e., if there was a cache hit or miss in UniCache.
-    type UniCache: UniCache<T = Self>;
-    #[cfg(all(feature = "unicache", feature = "serde"))]
+    #[cfg(all(feature = "unicache"))]
     /// The unicache type for caching popular/re-occurring fields of an entry.
     type UniCache: UniCache<T = Self> + Serialize + for<'a> Deserialize<'a>;
 }
 
 /// A StopSign entry that marks the end of a configuration. Used for reconfiguration.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StopSign {
-    /// The new `Omnipaxos` cluster configuration
-    pub next_config: ClusterConfig,
-    /// Metadata for the reconfiguration.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StopSign<C: ClusterConfigTrait> {
+    /// The new cluster configuration.
+    pub next_config: C,
+    /// Metadata for the reconfiguration, if any.
     pub metadata: Option<Vec<u8>>,
 }
 
-impl StopSign {
+impl<C: ClusterConfigTrait> StopSign<C> {
     /// Creates a [`StopSign`].
-    pub fn with(next_config: ClusterConfig, metadata: Option<Vec<u8>>) -> Self {
+    pub fn with(next_config: C, metadata: Option<Vec<u8>>) -> Self {
         StopSign {
             next_config,
             metadata,
@@ -67,8 +59,7 @@ impl StopSign {
 
 /// Snapshot type. A `Complete` snapshot contains all snapshotted data while `Delta` has snapshotted changes since an earlier snapshot.
 #[allow(missing_docs)]
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SnapshotType<T>
 where
     T: Entry,
@@ -99,7 +90,7 @@ pub type StorageResult<T> = Result<T, Box<dyn Error>>;
 
 /// The write operations of the storge implementation.
 #[derive(Debug)]
-pub enum StorageOp<T: Entry> {
+pub enum StorageOp<T: Entry, C: ClusterConfigTrait> {
     /// Appends an entry to the end of the log.
     AppendEntry(T),
     /// Appends entries to the end of the log.
@@ -117,22 +108,23 @@ pub enum StorageOp<T: Entry> {
     /// Removes elements up to the given idx from storage.
     Trim(usize),
     /// Sets the StopSign used for reconfiguration.
-    SetStopsign(Option<StopSign>),
+    SetStopsign(Option<StopSign<C>>),
     /// Sets the snapshot.
     SetSnapshot(Option<T::Snapshot>),
 }
 
 /// Trait for implementing the storage backend of Sequence Paxos.
-pub trait Storage<T>
+pub trait Storage<T, C>
 where
     T: Entry,
+    C: ClusterConfigTrait,
 {
     /// **Atomically** perform all storage operations in order.
     /// For correctness, the operations must be atomic i.e., either all operations are performed
     /// successfully or all get rolled back. If the `StorageResult` returns as `Err`, the
     /// operations are assumed to have been rolled back to the previous state before this function
     /// call.
-    fn write_atomically(&mut self, ops: Vec<StorageOp<T>>) -> StorageResult<()>;
+    fn write_atomically(&mut self, ops: Vec<StorageOp<T, C>>) -> StorageResult<()>;
 
     /// Appends an entry to the end of the log.
     fn append_entry(&mut self, entry: T) -> StorageResult<()>;
@@ -174,10 +166,10 @@ where
     fn get_promise(&self) -> StorageResult<Option<Ballot>>;
 
     /// Sets the StopSign used for reconfiguration.
-    fn set_stopsign(&mut self, s: Option<StopSign>) -> StorageResult<()>;
+    fn set_stopsign(&mut self, s: Option<StopSign<C>>) -> StorageResult<()>;
 
     /// Returns the stored StopSign, returns `None` if no StopSign has been stored.
-    fn get_stopsign(&self) -> StorageResult<Option<StopSign>>;
+    fn get_stopsign(&self) -> StorageResult<Option<StopSign<C>>>;
 
     /// Removes elements up to the given [`idx`] from storage.
     fn trim(&mut self, idx: usize) -> StorageResult<()>;
@@ -196,8 +188,7 @@ where
 }
 
 /// A place holder type for when not using snapshots. You should not use this type, it is only internally when deriving the Entry implementation.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct NoSnapshot;
 
 impl<T: Entry> Snapshot<T> for NoSnapshot {

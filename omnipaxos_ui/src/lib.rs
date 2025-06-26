@@ -9,7 +9,7 @@ use crossterm::{
 use log::LevelFilter;
 use omnipaxos::utils::ui::OmniPaxosStates;
 use ratatui::{backend::CrosstermBackend, Terminal};
-use slog::{self, debug, o, Drain};
+use slog::{self, info, o, Drain};
 use std::{io::stdout, time::Duration};
 use tui_logger::*;
 
@@ -55,7 +55,7 @@ impl OmniPaxosUI {
             self.terminal.hide_cursor().unwrap();
             self.update_ui();
             self.started = true;
-            debug!(Self::logger(), "UI started with slog");
+            info!(Self::logger(), "UI started with slog");
         }
     }
 

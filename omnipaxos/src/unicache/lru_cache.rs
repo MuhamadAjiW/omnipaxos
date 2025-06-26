@@ -1,6 +1,5 @@
 use crate::unicache::*;
 use lru::LruCache;
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Wrapper to implement serde for LruCache
@@ -21,22 +20,8 @@ impl<Encodable, Encoded> std::ops::DerefMut for LruWrapper<Encodable, Encoded> {
 }
 
 /// UniCache with least-recently-used eviction policy
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
 #[serde(bound(deserialize = ""))]
-pub struct LRUniCache<Encodable, Encoded>
-where
-    Encodable: DefaultEncodable,
-    Encoded: DefaultEncoded,
-{
-    lru_cache_encoder: LruWrapper<Encodable, Encoded>,
-    lru_cache_decoder: LruWrapper<Encoded, Encodable>,
-    encoding: Encoded,
-    size: usize,
-}
-
-/// UniCache with least-recently-used eviction policy
-#[cfg(not(feature = "serde"))]
 pub struct LRUniCache<Encodable, Encoded>
 where
     Encodable: DefaultEncodable,
@@ -142,7 +127,6 @@ where
     }
 }
 
-#[cfg(feature = "serde")]
 mod serialization {
     use super::*;
     use serde::{
